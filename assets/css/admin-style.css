@@ -1,0 +1,8 @@
+.edhbb-credit-link {
+    color: #005588;
+    text-decoration: none;
+}
+
+.edhbb-credit-link:hover {
+    text-decoration: underline;
+}
