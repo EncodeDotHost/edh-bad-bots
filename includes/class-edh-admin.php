@@ -31,6 +31,9 @@ class EDH_Admin {
         add_action( 'admin_post_edhbb_add_whitelist_ip', array( $this, 'handle_add_whitelist_ip' ) );
         add_action( 'admin_post_edhbb_remove_whitelist_ip', array( $this, 'handle_remove_whitelist_ip' ) );
         add_action( 'admin_post_edhbb_remove_blocked_bot', array( $this, 'handle_remove_blocked_bot' ) );
+
+        // Handle form submission for plugin options.
+        add_action( 'admin_post_edhbb_save_options', array( $this, 'handle_save_options' ) );
     }
 
     /**
@@ -96,7 +99,7 @@ class EDH_Admin {
         }
 
         // Display any success or error messages (handled by WordPress settings API usually).
-        settings_errors( 'edhbb_messages' );
+        // settings_errors( 'edhbb_messages' ); // Moved this call inside admin-display.php
 
         // Include the actual HTML content for the admin page.
         // We pass the database instance to the view so it can fetch data.
@@ -145,8 +148,9 @@ class EDH_Admin {
             );
         }
 
-        // Redirect back to the admin page.
-        wp_redirect( admin_url( 'tools.php?page=' . $this->admin_page_slug ) );
+        // Redirect back to the admin page, maintaining the current tab.
+        $redirect_url = admin_url( 'tools.php?page=' . $this->admin_page_slug . '&tab=whitelist' );
+        wp_redirect( esc_url_raw( $redirect_url ) );
         exit;
     }
 
@@ -191,8 +195,9 @@ class EDH_Admin {
             );
         }
 
-        // Redirect back to the admin page.
-        wp_redirect( admin_url( 'tools.php?page=' . $this->admin_page_slug ) );
+        // Redirect back to the admin page, maintaining the current tab.
+        $redirect_url = admin_url( 'tools.php?page=' . $this->admin_page_slug . '&tab=whitelist' );
+        wp_redirect( esc_url_raw( $redirect_url ) );
         exit;
     }
 
@@ -237,8 +242,51 @@ class EDH_Admin {
             );
         }
 
-        // Redirect back to the admin page.
-        wp_redirect( admin_url( 'tools.php?page=' . $this->admin_page_slug ) );
+        // Redirect back to the admin page, maintaining the current tab.
+        $redirect_url = admin_url( 'tools.php?page=' . $this->admin_page_slug . '&tab=blocked' );
+        wp_redirect( esc_url_raw( $redirect_url ) );
         exit;
+    }
+
+    /**
+     * Handles the form submission for saving plugin options.
+     */
+    public function handle_save_options() {
+        // Verify nonce for security.
+        if ( ! isset( $_POST['_wpnonce'] ) || ! wp_verify_nonce( $_POST['_wpnonce'], 'edhbb_save_options_nonce' ) ) {
+            wp_die( __( 'Security check failed.', 'edh-bad-bots' ) );
+        }
+
+        // Check user capabilities.
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_die( __( 'You do not have sufficient permissions to access this page.', 'edh-bad-bots' ) );
+        }
+
+        // Get the value of the .htaccess blocking checkbox.
+        // If the checkbox is checked, $_POST['edhbb_enable_htaccess_blocking'] will be 'yes'.
+        // If unchecked, it won't be set, so we default to 'no'.
+        $enable_htaccess_blocking = isset( $_POST['edhbb_enable_htaccess_blocking'] ) ? 'yes' : 'no';
+
+        // Update the WordPress option.
+        // update_option() will add the option if it doesn't exist or update it if it does.
+        update_option( 'edhbb_enable_htaccess_blocking', $enable_htaccess_blocking );
+
+        // After updating the option, trigger an .htaccess update.
+        // The update_htaccess_block_rules method in EDH_Database will read the new option
+        // and either add or remove the .htaccess rules accordingly.
+        $this->db->update_htaccess_block_rules();
+
+        // Add a success message to be displayed on the admin page.
+        add_settings_error(
+            'edhbb_messages',
+            'edhbb_options_saved',
+            __( 'Plugin options saved.', 'edh-bad-bots' ),
+            'success'
+        );
+
+        // Redirect back to the admin page, specifically the 'options' tab, after saving.
+        $redirect_url = admin_url( 'tools.php?page=' . $this->admin_page_slug . '&tab=options' );
+        wp_redirect( esc_url_raw( $redirect_url ) );
+        exit; // Important: Always exit after a redirect to prevent further script execution.
     }
 }

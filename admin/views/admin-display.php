@@ -20,10 +20,13 @@ $whitelisted_ips = $db->get_whitelisted_ips();
 // Determine which tab is active (default to 'whitelist')
 $active_tab = isset( $_GET['tab'] ) ? sanitize_text_field( $_GET['tab'] ) : 'whitelist';
 
+// Get current option for .htaccess blocking
+$enable_htaccess_blocking = get_option( 'edhbb_enable_htaccess_blocking', 'no' ) === 'yes';
+
 ?>
 
 <div class="wrap">
-    <h1><?php esc_html_e( 'EDH Bad Bots Blocker', 'edh-bad-bots' ); ?> by <a class="edhbb-credit-link" href="https://encode.host" target="_blank">EncodeDotHost</a></h1>
+    <h1><?php esc_html_e( 'EDH Bad Bots Blocker', 'edh-bad-bots' ); ?></h1>
     <p><?php esc_html_e( 'Manage blocked bots and whitelisted IP addresses.', 'edh-bad-bots' ); ?></p>
 
     <!-- Display any success or error messages from form submissions -->
@@ -36,6 +39,9 @@ $active_tab = isset( $_GET['tab'] ) ? sanitize_text_field( $_GET['tab'] ) : 'whi
         </a>
         <a href="?page=edh-bad-bots-settings&tab=blocked" class="nav-tab <?php echo $active_tab == 'blocked' ? 'nav-tab-active' : ''; ?>">
             <?php esc_html_e( 'Blocked Bots', 'edh-bad-bots' ); ?>
+        </a>
+        <a href="?page=edh-bad-bots-settings&tab=options" class="nav-tab <?php echo $active_tab == 'options' ? 'nav-tab-active' : ''; ?>">
+            <?php esc_html_e( 'Options', 'edh-bad-bots' ); ?>
         </a>
         <a href="?page=edh-bad-bots-settings&tab=help" class="nav-tab <?php echo $active_tab == 'help' ? 'nav-tab-active' : ''; ?>">
             <?php esc_html_e( 'Help', 'edh-bad-bots' ); ?>
@@ -135,6 +141,32 @@ $active_tab = isset( $_GET['tab'] ) ? sanitize_text_field( $_GET['tab'] ) : 'whi
                     <p><?php esc_html_e( 'No bots currently blocked.', 'edh-bad-bots' ); ?></p>
                 <?php endif; ?>
             </div>
+        <?php elseif ( $active_tab == 'options' ) : // New Options Tab Section ?>
+            <div class="card">
+                <h2 class="title"><?php esc_html_e( 'Plugin Options', 'edh-bad-bots' ); ?></h2>
+                <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+                    <input type="hidden" name="action" value="edhbb_save_options">
+                    <?php wp_nonce_field( 'edhbb_save_options_nonce' ); ?>
+
+                    <table class="form-table">
+                        <tbody>
+                            <tr>
+                                <th scope="row"><?php esc_html_e( '.htaccess Blocking', 'edh-bad-bots' ); ?></th>
+                                <td>
+                                    <label for="edhbb_enable_htaccess_blocking">
+                                        <input type="checkbox" id="edhbb_enable_htaccess_blocking" name="edhbb_enable_htaccess_blocking" value="yes" <?php checked( $enable_htaccess_blocking ); ?> />
+                                        <?php esc_html_e( 'Enable server-level IP blocking via .htaccess file.', 'edh-bad-bots' ); ?>
+                                    </label>
+                                    <p class="description">
+                                        <?php esc_html_e( 'When enabled, blocked bot IPs will be added to your site\'s .htaccess file for immediate server-level blocking, bypassing caching. Disable if you experience conflicts or use Nginx.', 'edh-bad-bots' ); ?>
+                                    </p>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <?php submit_button( __( 'Save Options', 'edh-bad-bots' ), 'primary', 'submit_options' ); ?>
+                </form>
+            </div>
         <?php elseif ( $active_tab == 'help' ) : ?>
             <!-- Section for Help Text -->
             <div class="card">
@@ -173,6 +205,10 @@ $active_tab = isset( $_GET['tab'] ) ? sanitize_text_field( $_GET['tab'] ) : 'whi
                     <li>
                         <strong><?php esc_html_e( 'Blocked Bots:', 'edh-bad-bots' ); ?></strong>
                         <?php esc_html_e( 'This tab shows all IP addresses currently on the blocklist. IPs are automatically removed after 30 days, but you can manually unblock them here at any time.', 'edh-bad-bots' ); ?>
+                    </li>
+                    <li>
+                        <strong><?php esc_html_e( '.htaccess Blocking Option:', 'edh-bad-bots' ); ?></strong>
+                        <?php esc_html_e( 'On the "Options" tab, you can choose to enable or disable server-level IP blocking via the .htaccess file. If disabled, blocking will rely solely on PHP, which might be less effective with caching plugins.', 'edh-bad-bots' ); ?>
                     </li>
                 </ul>
             </div>

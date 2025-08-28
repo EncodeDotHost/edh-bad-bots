@@ -13,6 +13,7 @@ class EDH_Database {
     private $blocked_bots_table_name;
     private $whitelisted_ips_table_name;
     private $block_duration_days = 30; // Number of days an IP remains blocked
+    private $htaccess_path; // Path to the .htaccess file
 
     /**
      * Constructor for the EDH_Database class.
@@ -23,6 +24,7 @@ class EDH_Database {
         $this->wpdb = $wpdb;
         $this->blocked_bots_table_name = $this->wpdb->prefix . 'edhbb_blocked_bots';
         $this->whitelisted_ips_table_name = $this->wpdb->prefix . 'edhbb_whitelisted_ips';
+        $this->htaccess_path = ABSPATH . '.htaccess'; // Path to root .htaccess
     }
 
     /**
@@ -73,6 +75,9 @@ class EDH_Database {
         // Execute dbDelta to create/update tables.
         dbDelta( $sql_blocked_bots );
         dbDelta( $sql_whitelisted_ips );
+
+        // Ensure .htaccess rules are up-to-date on activation, respecting the option flag
+        $this->update_htaccess_block_rules();
     }
 
     /**
@@ -83,6 +88,8 @@ class EDH_Database {
     public function drop_tables() {
         $this->wpdb->query( "DROP TABLE IF EXISTS $this->blocked_bots_table_name" );
         $this->wpdb->query( "DROP TABLE IF EXISTS $this->whitelisted_ips_table_name" );
+        // Always remove .htaccess rules on deactivation, regardless of option, for cleanup
+        $this->remove_htaccess_block_rules(true); // Pass true to force removal
     }
 
     /**
@@ -111,6 +118,10 @@ class EDH_Database {
             )
         );
 
+        if ( $result ) {
+            $this->update_htaccess_block_rules(); // Update .htaccess when a new bot is blocked, respecting the option.
+        }
+
         return (bool) $result;
     }
 
@@ -126,6 +137,10 @@ class EDH_Database {
             array( 'ip_address' => $ip_address ),
             array( '%s' )
         );
+
+        if ( $result ) {
+            $this->update_htaccess_block_rules(); // Update .htaccess when a bot is unblocked, respecting the option.
+        }
 
         return (bool) $result;
     }
@@ -165,6 +180,8 @@ class EDH_Database {
     /**
      * Checks if a given IP address is currently blocked.
      * Considers the expiration date of the block.
+     * Note: This PHP check is less effective with full page caching.
+     * Server-level blocking via .htaccess is preferred for active blocks when enabled.
      *
      * @param string $ip_address The IP address to check.
      * @return bool True if the IP is blocked and not expired, false otherwise.
@@ -199,6 +216,11 @@ class EDH_Database {
             )
         );
 
+        if ($result) {
+            // Re-update .htaccess rules to ensure whitelisted IPs are not blocked by old rules, respecting the option.
+            $this->update_htaccess_block_rules();
+        }
+
         return (bool) $result;
     }
 
@@ -214,6 +236,11 @@ class EDH_Database {
             array( 'ip_address' => $ip_address ),
             array( '%s' )
         );
+
+        if ($result) {
+            // Re-update .htaccess rules as a whitelisted IP might now be eligible for blocking if it was in blocked list, respecting the option.
+            $this->update_htaccess_block_rules();
+        }
 
         return (bool) $result;
     }
@@ -250,13 +277,123 @@ class EDH_Database {
     /**
      * Cleans up expired entries from the blocked bots table.
      * This ensures the table doesn't grow indefinitely with old, inactive blocks.
+     * And triggers an .htaccess update to remove expired blocks (if enabled).
      */
     public function clean_old_blocked_bots() {
-        $this->wpdb->query(
+        $result = $this->wpdb->query(
             $this->wpdb->prepare(
                 "DELETE FROM $this->blocked_bots_table_name WHERE expires_at <= %s",
                 current_time( 'mysql' )
             )
         );
+
+        if ( $result !== false && $result > 0 ) { // If any rows were deleted
+            $this->update_htaccess_block_rules(); // Update .htaccess to remove expired blocks, respecting the option.
+        }
+    }
+
+    /**
+     * Generates and updates the .htaccess file with current IP blocking rules.
+     * This function should be called whenever the blocked IPs list changes
+     * or the .htaccess blocking option is toggled.
+     */
+    public function update_htaccess_block_rules() {
+        // Retrieve the current setting for .htaccess blocking. Defaults to 'yes' if not set.
+        $enable_htaccess_blocking = get_option( 'edhbb_enable_htaccess_blocking', 'yes' ) === 'yes';
+
+        // Perform basic checks for .htaccess file existence and writability.
+        if ( ! file_exists( $this->htaccess_path ) || ! is_writable( $this->htaccess_path ) ) {
+            // Log an error if .htaccess is expected but not found/writable.
+            if ( $enable_htaccess_blocking ) {
+                error_log( '[EDH Bad Bots] .htaccess file not found or not writable at: ' . $this->htaccess_path );
+            }
+            return; // Cannot proceed if file is inaccessible.
+        }
+
+        // Get the current content of the .htaccess file.
+        $htaccess_content = file_get_contents( $this->htaccess_path );
+
+        // Define our unique markers for the plugin's block.
+        $start_marker = '# BEGIN EDH Bad Bots Block';
+        $end_marker = '# END EDH Bad Bots Block';
+
+        // Always remove any existing block first. This ensures we start clean before potentially adding new rules
+        // or leaving the block empty if the option is disabled.
+        if ( strpos( $htaccess_content, $start_marker ) !== false ) {
+            $htaccess_content = preg_replace( "/$start_marker.*?$end_marker\s*/s", '', $htaccess_content );
+        }
+
+        // Only generate and insert new rules if the 'enable_htaccess_blocking' option is active.
+        if ( $enable_htaccess_blocking ) {
+            // Retrieve all currently blocked IPs from the database.
+            // Importantly, we filter out any IPs that are also in the whitelist,
+            // as whitelisted IPs should never be blocked by .htaccess rules.
+            $blocked_ips_raw = $this->get_blocked_bots();
+            $blocked_ips_for_htaccess = [];
+            foreach ($blocked_ips_raw as $bot) {
+                if (!$this->is_ip_whitelisted($bot['ip_address'])) {
+                    $blocked_ips_for_htaccess[] = $bot['ip_address'];
+                }
+            }
+
+            $new_rules = '';
+            // If there are IPs to block, generate the .htaccess rules.
+            if ( ! empty( $blocked_ips_for_htaccess ) ) {
+                $new_rules .= "\n{$start_marker}\n"; // Add our start marker
+                $new_rules .= "<Limit GET POST HEAD>\n"; // Apply rules to specific HTTP methods
+                $new_rules .= "Order Allow,Deny\n"; // Define the order of processing
+                $new_rules .= "Allow from All\n"; // Allow all by default...
+                foreach ( $blocked_ips_for_htaccess as $ip ) {
+                    $new_rules .= "Deny from " . $ip . "\n"; // ...then deny specific IPs
+                }
+                $new_rules .= "</Limit>\n";
+                $new_rules .= "{$end_marker}\n"; // Add our end marker
+
+                // Find the WordPress block marker and insert our rules before it,
+                // or append them to the end of the file if the WordPress block isn't found.
+                if ( strpos( $htaccess_content, '# BEGIN WordPress' ) !== false ) {
+                    $htaccess_content = str_replace( '# BEGIN WordPress', $new_rules . '# BEGIN WordPress', $htaccess_content );
+                } else {
+                    $htaccess_content .= $new_rules;
+                }
+            }
+        }
+
+        // Write the (potentially modified) content back to the .htaccess file.
+        file_put_contents( $this->htaccess_path, $htaccess_content );
+    }
+
+    /**
+     * Removes all plugin-specific rules from the .htaccess file.
+     * This should be called during plugin deactivation or when .htaccess blocking is disabled.
+     *
+     * @param bool $force_remove Whether to force removal even if option is disabled.
+     * Useful for plugin deactivation to ensure a clean uninstall.
+     */
+    private function remove_htaccess_block_rules( $force_remove = false ) {
+        // Get the current option status.
+        $enable_htaccess_blocking = get_option( 'edhbb_enable_htaccess_blocking', 'yes' ) === 'yes';
+
+        // Only remove rules if .htaccess blocking is currently enabled,
+        // or if explicitly told to force removal (e.g., during plugin deactivation).
+        if ( ! $enable_htaccess_blocking && ! $force_remove ) {
+            return; // Do nothing if option is off and not forced.
+        }
+
+        // Check file accessibility.
+        if ( ! file_exists( $this->htaccess_path ) || ! is_writable( $this->htaccess_path ) ) {
+            return; // Cannot remove if file is inaccessible.
+        }
+
+        $htaccess_content = file_get_contents( $this->htaccess_path );
+
+        $start_marker = '# BEGIN EDH Bad Bots Block';
+        $end_marker = '# END EDH Bad Bots Block';
+
+        // Remove the entire block if it exists within the file.
+        if ( strpos( $htaccess_content, $start_marker ) !== false ) {
+            $htaccess_content = preg_replace( "/$start_marker.*?$end_marker\s*/s", '', $htaccess_content );
+            file_put_contents( $this->htaccess_path, $htaccess_content ); // Write back the cleaned content.
+        }
     }
 }

@@ -10,6 +10,8 @@ EDH Bad Bots is an intelligent bot detection and blocking system that protects y
 
 - **Automatic Bot Detection**: Identifies bad bots using a hidden trap URL technique
 - **Smart Blocking System**: Blocks misbehaving bots for 30 days automatically
+- **Dual-Level Blocking**: Server-level `.htaccess` blocking AND PHP-level blocking for maximum effectiveness
+- **Configurable Blocking Methods**: Choose between `.htaccess` blocking (Apache) or PHP-only blocking (Nginx compatible)
 - **IP Whitelist Management**: Protect trusted IPs from ever being blocked
 - **Clean Admin Interface**: Easy-to-use dashboard with tabbed navigation
 - **Zero False Positives**: Legitimate search engine bots that follow robots.txt rules are never affected
@@ -50,15 +52,23 @@ Access the plugin dashboard at **Tools > Bad Bots** in your WordPress admin:
 - See when each IP was blocked and when the block expires
 - Manually unblock IPs if needed
 
+#### Options Tab
+- **`.htaccess Blocking`**: Enable/disable server-level IP blocking via `.htaccess` file
+- Configure blocking method based on your server setup (Apache vs Nginx)
+- Server-level blocking bypasses caching for immediate effect
+
 #### Help Tab
 - Detailed explanation of how the plugin works
 - Best practices for managing IPs
+- Information about `.htaccess` blocking options
 
 ### Requirements
 
 - WordPress 5.0 or higher
 - PHP 7.4 or higher
 - MySQL 5.6 or higher
+- Apache server (for `.htaccess` blocking) or Nginx (PHP-only blocking)
+- Writable `.htaccess` file (if using Apache server-level blocking)
 
 ## Technical Details
 
@@ -69,18 +79,40 @@ The plugin creates two custom database tables:
 - `wp_edhbb_blocked_bots`: Stores blocked IP addresses with expiration dates
 - `wp_edhbb_whitelisted_ips`: Stores permanently whitelisted IP addresses
 
+### Blocking Methods
+
+The plugin offers two blocking approaches:
+
+#### 1. Server-Level Blocking (`.htaccess`)
+- **Default method** for Apache servers
+- Blocks IPs at the server level before WordPress loads
+- Bypasses caching plugins for immediate effect
+- More efficient and faster blocking
+- Automatically manages `.htaccess` file with unique markers
+- Safe cleanup on plugin deactivation
+
+#### 2. PHP-Level Blocking
+- **Alternative method** for Nginx or when `.htaccess` is unavailable
+- Blocks IPs during WordPress initialization
+- Compatible with all web servers
+- May be affected by caching plugins
+- No server configuration files modified
+
 ### Security Features
 
 - **Nonce Verification**: All forms use WordPress nonces for CSRF protection
 - **Capability Checks**: Only users with `manage_options` capability can access admin features
 - **Input Sanitization**: All user inputs are properly sanitized and validated
 - **SQL Injection Protection**: All database queries use prepared statements
+- **Safe `.htaccess` Management**: Uses unique markers and automatic cleanup
 
 ### Performance Optimization
 
 - **Automatic Cleanup**: Expired blocks are automatically removed from the database
 - **Efficient Queries**: Database operations are optimized for minimal performance impact
 - **Smart Loading**: Admin assets only load on the plugin's admin page
+- **Server-Level Blocking**: `.htaccess` blocking prevents blocked requests from reaching PHP
+- **Whitelist Filtering**: Whitelisted IPs are excluded from `.htaccess` rules automatically
 
 ## API Hooks
 
@@ -128,6 +160,25 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## Changelog
 
+### Version 1.1.0 - Major Feature Release
+- **New**: Server-level IP blocking via `.htaccess` file management
+- **New**: "Options" tab in admin interface for configurable blocking methods
+- **Enhanced**: Dual-level blocking system (server + PHP) for maximum effectiveness
+- **Added**: Automatic `.htaccess` file management with unique markers
+- **Added**: Smart whitelist filtering for `.htaccess` rules
+- **Improved**: Admin interface with enhanced tabbed navigation
+- **Enhanced**: Performance optimization with server-level blocking
+- **Added**: Nginx compatibility with PHP-only blocking fallback
+- **Updated**: Comprehensive documentation including `.htaccess` functionality
+- **Added**: Better error handling and logging for `.htaccess` operations
+- **Added**: Automatic cleanup of `.htaccess` rules on deactivation
+
+### Version 1.0.4
+- Adding min PHP + WordPress requirements, tested on WordPress 6.8.2
+
+### Version 1.0.3
+- Updated README and license
+
 ### Version 1.0.2
 - Added plugin action links for easier access to settings
 
@@ -168,8 +219,17 @@ Bots are automatically blocked for 30 days. You can manually unblock them earlie
 ### Can I protect my own IP address?
 Yes! Add your IP address to the whitelist in the admin panel to ensure you're never blocked.
 
+### What's the difference between .htaccess and PHP blocking?
+`.htaccess` blocking (default) blocks bots at the server level before WordPress loads, making it faster and more effective. PHP blocking works during WordPress initialization and is compatible with Nginx servers.
+
 ### Does this affect site performance?
-The plugin is designed for minimal performance impact with efficient database queries and automatic cleanup of old data.
+The plugin is designed for minimal performance impact. Server-level `.htaccess` blocking actually improves performance by stopping blocked requests before they reach PHP. Database operations are optimized with automatic cleanup.
+
+### Will this work with caching plugins?
+Yes! Server-level `.htaccess` blocking bypasses caching entirely, ensuring blocked bots are stopped immediately. PHP-level blocking may be affected by some caching configurations.
 
 ### What happens if I deactivate the plugin?
-The blocking stops immediately, but your data (blocked IPs and whitelist) is preserved in case you reactivate the plugin later.
+The blocking stops immediately and `.htaccess` rules are automatically cleaned up. Your data (blocked IPs and whitelist) is preserved in case you reactivate the plugin later.
+
+### Is it safe for my .htaccess file?
+Yes! The plugin uses unique markers (`# BEGIN EDH Bad Bots Block` / `# END EDH Bad Bots Block`) to safely manage its rules without affecting other configurations. Rules are automatically removed on deactivation.

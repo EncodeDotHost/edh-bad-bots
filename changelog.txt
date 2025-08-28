@@ -1,3 +1,17 @@
+1.1.0 Major Feature Release: Server-Level Blocking & Enhanced Admin Interface
+- Added server-level IP blocking via .htaccess file management
+- New "Options" tab in admin interface for configurable blocking methods
+- Enhanced blocking system with dual-level protection (server + PHP)
+- Automatic .htaccess file management with unique markers for safe operation
+- Smart whitelist filtering to exclude trusted IPs from .htaccess rules
+- Improved admin interface with better tabbed navigation
+- Enhanced performance with server-level blocking bypassing caching
+- Added Nginx compatibility with PHP-only blocking fallback
+- Comprehensive documentation updates including .htaccess functionality
+- Better error handling and logging for .htaccess operations
+- Automatic cleanup of .htaccess rules on plugin deactivation
+- Updated FAQ section with blocking method comparisons
+
 1.0.4 Adding min PHP + WordPress, plus tested on 6.8.2
 1.0.3 Updated readme and licence
 1.0.2 Added plugin_action_links
