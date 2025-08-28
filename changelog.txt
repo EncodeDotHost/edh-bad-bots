@@ -1,3 +1,4 @@
+1.0.3 Updated readme and licence
 1.0.2 Added plugin_action_links
 1.0.1 Changed author name
 1.0.0 Initial Plugin Created.
