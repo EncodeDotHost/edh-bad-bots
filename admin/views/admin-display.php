@@ -27,7 +27,7 @@ $block_duration_days = get_option( 'edhbb_block_duration_days', 30 );
 ?>
 
 <div class="wrap">
-    <h1><?php esc_html_e( 'EDH Bad Bots Blocker', 'edh-bad-bots' ); ?></h1>
+    <h1><?php esc_html_e( 'EDH Bad Bots Blocker', 'edh-bad-bots' ); ?> by <a class="edhbb-credit-link" href="https://encode.host" target="_blank">EncodeDotHost</a></h1>
     <p><?php esc_html_e( 'Manage blocked bots and whitelisted IP addresses.', 'edh-bad-bots' ); ?></p>
 
     <!-- Display any success or error messages from form submissions -->
