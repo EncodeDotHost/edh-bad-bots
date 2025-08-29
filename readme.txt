@@ -1,4 +1,12 @@
-# EDH Bad Bots
+=== EDH Bad Bots ===
+Contributors: EncodeDotHost, nbwpuk
+Tags: Security, Bots
+Requires at least: 6.2
+Tested up to: 8.6.2
+Stable tag: 6.2
+Requires PHP: 5.6
+License: GPLv2 or later
+License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
 A smart WordPress plugin that automatically blocks malicious bots and crawlers that ignore your site's `robots.txt` file.
 

@@ -10,7 +10,7 @@
  * Author: EncodeDotHost
  * Author URI: https://encode.host
  * Contributor: EncodeDotHost, nbwpuk
- * License: GPL v3 or later
+ * License: GPL v2 or later
  * Text Domain: edh-bad-bots
  *
  * @package edh-bad-bots
