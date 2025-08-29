@@ -52,7 +52,7 @@ $block_duration_days = get_option( 'edhbb_block_duration_days', 30 );
     <div class="tab-content">
         <?php if ( $active_tab == 'whitelist' ) : ?>
             <!-- Section for Whitelisting IP Addresses -->
-            <div class="card">
+            <div class="card edhbb-card">
                 <h2 class="title"><?php esc_html_e( 'Whitelist IP Address', 'edh-bad-bots' ); ?></h2>
                 <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
                     <input type="hidden" name="action" value="edhbb_add_whitelist_ip">
@@ -74,7 +74,7 @@ $block_duration_days = get_option( 'edhbb_block_duration_days', 30 );
             </div>
 
             <!-- Section for Currently Whitelisted IP Addresses -->
-            <div class="card">
+            <div class="card edhbb-card">
                 <h2 class="title"><?php esc_html_e( 'Currently Whitelisted IPs', 'edh-bad-bots' ); ?></h2>
                 <?php if ( ! empty( $whitelisted_ips ) ) : ?>
                     <table class="wp-list-table widefat fixed striped">
@@ -108,7 +108,7 @@ $block_duration_days = get_option( 'edhbb_block_duration_days', 30 );
             </div>
         <?php elseif ( $active_tab == 'blocked' ) : ?>
             <!-- Section for Blocked Bots -->
-            <div class="card">
+            <div class="card edhbb-card">
                 <h2 class="title"><?php esc_html_e( 'Currently Blocked Bots', 'edh-bad-bots' ); ?></h2>
                 <?php if ( ! empty( $blocked_bots ) ) : ?>
                     <table class="wp-list-table widefat fixed striped">
@@ -143,7 +143,7 @@ $block_duration_days = get_option( 'edhbb_block_duration_days', 30 );
                 <?php endif; ?>
             </div>
         <?php elseif ( $active_tab == 'options' ) : // New Options Tab Section ?>
-            <div class="card">
+            <div class="card edhbb-card">
                 <h2 class="title"><?php esc_html_e( 'Plugin Options', 'edh-bad-bots' ); ?></h2>
                 <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
                     <input type="hidden" name="action" value="edhbb_save_options">
@@ -190,7 +190,7 @@ $block_duration_days = get_option( 'edhbb_block_duration_days', 30 );
             $trap_url = esc_url( home_url( $path . '/' . $hash . '/' ) );
             ?>
             <!-- Section for Help Text -->
-            <div class="card">
+            <div class="card edhbb-card">
                 <h2 class="title"><?php esc_html_e( 'How EDH Bad Bots Works', 'edh-bad-bots' ); ?></h2>
                 <p>
                     <?php esc_html_e( 'This plugin helps protect your site from bots that do not respect the `robots.txt` file.', 'edh-bad-bots' ); ?>

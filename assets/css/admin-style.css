@@ -6,3 +6,7 @@
 .edhbb-credit-link:hover {
     text-decoration: underline;
 }
+
+.edhbb-card {
+    max-width: unset;
+}
