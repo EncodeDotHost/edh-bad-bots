@@ -36,7 +36,7 @@ class EDH_Blocker {
      * @return string The generated hash.
      */
     private function generate_trap_url_hash() {
-        $site_url_parts = parse_url( site_url() );
+        $site_url_parts = wp_parse_url( site_url() );
         $host = $site_url_parts['host'];
         $scheme = $site_url_parts['scheme'];
         return wp_hash( 'site-' . $host . '-disallow-rule-' . $scheme );
@@ -51,11 +51,11 @@ class EDH_Blocker {
         $ip_address = 'UNKNOWN';
 
         if ( isset( $_SERVER['HTTP_CLIENT_IP'] ) && ! empty( $_SERVER['HTTP_CLIENT_IP'] ) ) {
-            $ip_address = $_SERVER['HTTP_CLIENT_IP'];
+            $ip_address = sanitize_text_field( wp_unslash( $_SERVER['HTTP_CLIENT_IP'] ) );
         } elseif ( isset( $_SERVER['HTTP_X_FORWARDED_FOR'] ) && ! empty( $_SERVER['HTTP_X_FORWARDED_FOR'] ) ) {
-            $ip_address = explode( ',', $_SERVER['HTTP_X_FORWARDED_FOR'] )[0]; // Take the first IP if multiple are listed
+            $ip_address = explode( ',', sanitize_text_field( wp_unslash( $_SERVER['HTTP_X_FORWARDED_FOR'] ) ) )[0]; // Take the first IP if multiple are listed
         } elseif ( isset( $_SERVER['REMOTE_ADDR'] ) && ! empty( $_SERVER['REMOTE_ADDR'] ) ) {
-            $ip_address = $_SERVER['REMOTE_ADDR'];
+            $ip_address = sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) );
         }
 
         // Validate the IP address
@@ -100,8 +100,13 @@ class EDH_Blocker {
             return;
         }
 
-        $current_url = $_SERVER['REQUEST_URI'];
-        $site_path = parse_url( site_url(), PHP_URL_PATH );
+        // Validate that REQUEST_URI exists before using it
+        if ( ! isset( $_SERVER['REQUEST_URI'] ) ) {
+            return; // Cannot proceed without REQUEST_URI
+        }
+        
+        $current_url = esc_url_raw( wp_unslash( $_SERVER['REQUEST_URI'] ) );
+        $site_path = wp_parse_url( site_url(), PHP_URL_PATH );
         $expected_trap_path = rtrim( $site_path, '/' ) . '/' . $this->trap_url_hash . '/';
 
         // Check if the current URL matches our trap URL.

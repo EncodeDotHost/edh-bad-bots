@@ -3,14 +3,22 @@
  * Plugin Name: EDH Bad Bots
  * Plugin URI: https://github.com/EncodeDotHost/edh-bad-bots
  * Description: This plugin is used to block bots that don't honor the robots.txt file from the site.
- * Version: 1.2.3
- * Author: EncodeDotHost
- * Author URI: https://encode.host
- * Contributor: @EncodeDotHost, @nbwpuk
- * License: GPL v3 or later
- * Requires at least: 4.4
+ * Version: 1.3.0
+ * Requires at least: 6.2
  * Requires PHP: 5.6
  * Tested up to: 6.8.2
+ * Author: EncodeDotHost
+ * Author URI: https://encode.host
+ * Contributor: EncodeDotHost, nbwpuk
+ * License: GPL v3 or later
+ * Text Domain: edh-bad-bots
+ *
+ * @package edh-bad-bots
+ * @author EncodeDotHost
+ * @contributor nbwpuk
+ * @version 1.3.0
+ * @link https://github.com/EncodeDotHost/edh-bad-bots
+ * @license GPL v3 or later
  */
 
  if(!defined('ABSPATH')) exit;
@@ -21,7 +29,7 @@
  */
 define( 'EDHBB_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'EDHBB_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
-define( 'EDHBB_VERSION', '1.2.3' );
+define( 'EDHBB_VERSION', '1.3.0' );
 
 /**
  * Include core plugin files.
@@ -94,7 +102,7 @@ add_filter( 'robots_txt', function( $output, $public ) {
         /**
          * Get site url and create a unique hash per domain to disallow access to the site.
          */
-        $site_url = parse_url( site_url() );
+        $site_url = wp_parse_url( site_url() );
         $hash = wp_hash( 'site-' . $site_url[ 'host' ] . '-disallow-rule-' . $site_url[ 'scheme' ]);
 
         $path     = ( ! empty( $site_url[ 'path' ] ) ) ? $site_url[ 'path' ] : '';
@@ -121,7 +129,7 @@ add_filter( 'robots_txt', function( $output, $public ) {
 add_action( 'wp_footer', function() {
     // Check if the site is publicly visible for search engines
     if ( '1' == get_option( 'blog_public' ) ) {
-        $site_url = parse_url( site_url() );
+        $site_url = wp_parse_url( site_url() );
         $hash = wp_hash( 'site-' . $site_url[ 'host' ] . '-disallow-rule-' . $site_url[ 'scheme' ]);
         $path = ( ! empty( $site_url[ 'path' ] ) ) ? $site_url[ 'path' ] : '';
         $trap_url = esc_url( home_url( $path . '/' . $hash . '/' ) );
@@ -129,7 +137,7 @@ add_action( 'wp_footer', function() {
         // Output a visually hidden link with nofollow to act as a bot trap.
         // The link is styled to be invisible to human users but still present in the DOM for bots.
         echo '<div style="position: absolute; left: -9999px; overflow: hidden; height: 1px;">';
-        echo '<a href="' . $trap_url . '" rel="nofollow" tabindex="-1">Sssshhh, secret bot trap!</a>';
+        echo '<a href="' . esc_url( $trap_url ) . '" rel="nofollow" tabindex="-1">Sssshhh, secret bot trap!</a>';
         echo '</div>';
     }
 });

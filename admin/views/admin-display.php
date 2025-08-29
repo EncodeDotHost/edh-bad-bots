@@ -18,7 +18,8 @@ $blocked_bots = $db->get_blocked_bots();
 $whitelisted_ips = $db->get_whitelisted_ips();
 
 // Determine which tab is active (default to 'whitelist')
-$active_tab = isset( $_GET['tab'] ) ? sanitize_text_field( $_GET['tab'] ) : 'whitelist';
+// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Tab switching doesn't require nonce verification
+$active_tab = isset( $_GET['tab'] ) ? sanitize_text_field( wp_unslash( $_GET['tab'] ) ) : 'whitelist';
 
 // Get current option for .htaccess blocking
 $enable_htaccess_blocking = get_option( 'edhbb_enable_htaccess_blocking', 'no' ) === 'yes';
@@ -182,12 +183,12 @@ $block_duration_days = get_option( 'edhbb_block_duration_days', 30 );
         <?php elseif ( $active_tab == 'help' ) : ?>
             <?php
             // Generate the trap URL to display in the help text.
-            $site_url_parts = parse_url( site_url() );
+            $site_url_parts = wp_parse_url( site_url() );
             $host = $site_url_parts['host'];
             $scheme = $site_url_parts['scheme'];
             $hash = wp_hash( 'site-' . $host . '-disallow-rule-' . $scheme );
             $path = !empty($site_url_parts['path']) ? $site_url_parts['path'] : '';
-            $trap_url = esc_url( home_url( $path . '/' . $hash . '/' ) );
+            $trap_url = home_url( $path . '/' . $hash . '/' );
             ?>
             <!-- Section for Help Text -->
             <div class="card edhbb-card">
@@ -241,7 +242,7 @@ $block_duration_days = get_option( 'edhbb_block_duration_days', 30 );
                     <strong><?php esc_html_e( 'Your unique trap URL is:', 'edh-bad-bots' ); ?></strong>
                 </p>
                 <p>
-                    <code><?php echo $trap_url; ?></code>
+                    <code><?php echo esc_url( $trap_url ); ?></code>
                 </p>
                 <p>
                     <?php esc_html_e( 'Please refer to your caching plugin\'s documentation for instructions on how to exclude a URL.', 'edh-bad-bots' ); ?>

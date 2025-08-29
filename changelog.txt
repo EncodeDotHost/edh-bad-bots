@@ -1,3 +1,4 @@
+1.3.0 - Bringing up to WordPress coding standards
 1.2.3 - Added instructions to the "Help" tab for excluding the unique trap URL from caching plugins.
 1.2.2 Block duration is now a configurable setting
 1.2.1 Fixing apache error doc

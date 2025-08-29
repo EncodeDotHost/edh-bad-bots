@@ -160,6 +160,9 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## Changelog
 
+### Version 1.3.0
+ - Bringing up to WordPress coding standards
+
 ### Version 1.2.3
  - Added instructions to the "Help" tab for excluding the unique trap URL from caching plugins.
 

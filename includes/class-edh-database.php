@@ -14,6 +14,7 @@ class EDH_Database {
     private $whitelisted_ips_table_name;
     private $block_duration_days; // Number of days an IP remains blocked
     private $htaccess_path; // Path to the .htaccess file
+    private $wp_filesystem; // WP_Filesystem instance
 
     /**
      * Constructor for the EDH_Database class.
@@ -26,6 +27,25 @@ class EDH_Database {
         $this->whitelisted_ips_table_name = $this->wpdb->prefix . 'edhbb_whitelisted_ips';
         $this->block_duration_days = get_option( 'edhbb_block_duration_days', 30 );
         $this->htaccess_path = ABSPATH . '.htaccess'; // Path to root .htaccess
+        $this->init_filesystem();
+    }
+
+    /**
+     * Initialize WP_Filesystem.
+     * This is required for proper WordPress filesystem operations.
+     */
+    private function init_filesystem() {
+        if ( ! function_exists( 'WP_Filesystem' ) ) {
+            require_once ABSPATH . 'wp-admin/includes/file.php';
+        }
+        
+        // Initialize the WP_Filesystem
+        if ( ! WP_Filesystem() ) {
+            $this->wp_filesystem = null;
+        } else {
+            global $wp_filesystem;
+            $this->wp_filesystem = $wp_filesystem;
+        }
     }
 
     /**
@@ -35,7 +55,7 @@ class EDH_Database {
     public function create_tables() {
         // Load the upgrade.php file for dbDelta function.
         if ( ! function_exists( 'dbDelta' ) ) {
-            require_once ABSPATH . 'wp-admin/includes/upgrade';
+            require_once ABSPATH . 'wp-admin/includes/upgrade.php';
         }
 
         // Character set and collate for the tables.
@@ -49,14 +69,19 @@ class EDH_Database {
          * - blocked_at: Timestamp when the bot was blocked.
          * - expires_at: Timestamp when the block will expire (30 days after blocked_at).
          */
-        $sql_blocked_bots = "CREATE TABLE IF NOT EXISTS $this->blocked_bots_table_name (
-            id bigint(20) NOT NULL AUTO_INCREMENT,
-            ip_address varchar(45) NOT NULL,
-            blocked_at datetime NOT NULL,
-            expires_at datetime NOT NULL,
-            PRIMARY KEY (id),
-            UNIQUE KEY ip_address (ip_address)
-        ) $charset_collate;";
+        // phpcs:disable WordPress.DB.PreparedSQL.NotPrepared -- %i placeholder is valid since WordPress 6.2
+        $sql_blocked_bots = $this->wpdb->prepare(
+            "CREATE TABLE IF NOT EXISTS %i (
+                id bigint(20) NOT NULL AUTO_INCREMENT,
+                ip_address varchar(45) NOT NULL,
+                blocked_at datetime NOT NULL,
+                expires_at datetime NOT NULL,
+                PRIMARY KEY (id),
+                UNIQUE KEY ip_address (ip_address)
+            )",
+            $this->blocked_bots_table_name
+        ) . ' ' . $charset_collate;
+        // phpcs:enable WordPress.DB.PreparedSQL.NotPrepared
 
         /**
          * SQL for the whitelisted IPs table.
@@ -65,13 +90,18 @@ class EDH_Database {
          * - ip_address: The IP address to whitelist.
          * - added_at: Timestamp when the IP was added to the whitelist.
          */
-        $sql_whitelisted_ips = "CREATE TABLE IF NOT EXISTS $this->whitelisted_ips_table_name (
-            id bigint(20) NOT NULL AUTO_INCREMENT,
-            ip_address varchar(45) NOT NULL,
-            added_at datetime NOT NULL,
-            PRIMARY KEY (id),
-            UNIQUE KEY ip_address (ip_address)
-        ) $charset_collate;";
+        // phpcs:disable WordPress.DB.PreparedSQL.NotPrepared -- %i placeholder is valid since WordPress 6.2
+        $sql_whitelisted_ips = $this->wpdb->prepare(
+            "CREATE TABLE IF NOT EXISTS %i (
+                id bigint(20) NOT NULL AUTO_INCREMENT,
+                ip_address varchar(45) NOT NULL,
+                added_at datetime NOT NULL,
+                PRIMARY KEY (id),
+                UNIQUE KEY ip_address (ip_address)
+            )",
+            $this->whitelisted_ips_table_name
+        ) . ' ' . $charset_collate;
+        // phpcs:enable WordPress.DB.PreparedSQL.NotPrepared
 
         // Execute dbDelta to create/update tables.
         dbDelta( $sql_blocked_bots );
@@ -87,8 +117,10 @@ class EDH_Database {
      * in the main plugin file to preserve data upon deactivation.
      */
     public function drop_tables() {
-        $this->wpdb->query( "DROP TABLE IF EXISTS $this->blocked_bots_table_name" );
-        $this->wpdb->query( "DROP TABLE IF EXISTS $this->whitelisted_ips_table_name" );
+        // phpcs:disable WordPress.DB.PreparedSQL.NotPrepared -- %i placeholder is valid since WordPress 6.2
+        $this->wpdb->query( $this->wpdb->prepare( "DROP TABLE IF EXISTS %i", $this->blocked_bots_table_name ) );
+        $this->wpdb->query( $this->wpdb->prepare( "DROP TABLE IF EXISTS %i", $this->whitelisted_ips_table_name ) );
+        // phpcs:enable WordPress.DB.PreparedSQL.NotPrepared
         // Always remove .htaccess rules on deactivation, regardless of option, for cleanup
         $this->remove_htaccess_block_rules(true); // Pass true to force removal
     }
@@ -106,18 +138,22 @@ class EDH_Database {
 
         // Get current time and calculate expiration time.
         $current_time = current_time( 'mysql' );
-        $expires_at = date( 'Y-m-d H:i:s', strtotime( $current_time . ' + ' . $this->block_duration_days . ' days' ) );
+        $expires_timestamp = strtotime( $current_time . ' + ' . $this->block_duration_days . ' days' );
+        $expires_at = gmdate( 'Y-m-d H:i:s', $expires_timestamp );
 
         // Insert the IP address into the blocked bots table.
         // Using `INSERT IGNORE` to prevent errors if the IP is already present due to the UNIQUE KEY constraint.
+        // phpcs:disable WordPress.DB.PreparedSQL.NotPrepared -- %i placeholder is valid since WordPress 6.2
         $result = $this->wpdb->query(
             $this->wpdb->prepare(
-                "INSERT IGNORE INTO $this->blocked_bots_table_name (ip_address, blocked_at, expires_at) VALUES (%s, %s, %s)",
+                "INSERT IGNORE INTO %i (ip_address, blocked_at, expires_at) VALUES (%s, %s, %s)",
+                $this->blocked_bots_table_name,
                 $ip_address,
                 $current_time,
                 $expires_at
             )
         );
+        // phpcs:enable WordPress.DB.PreparedSQL.NotPrepared
 
         if ( $result ) {
             $this->update_htaccess_block_rules(); // Update .htaccess when a new bot is blocked, respecting the option.
@@ -157,25 +193,24 @@ class EDH_Database {
     public function get_blocked_bots( $limit = 0, $offset = 0 ) {
         $this->clean_old_blocked_bots(); // Ensure only current blocks are considered.
 
-        $sql = "SELECT id, ip_address, blocked_at, expires_at FROM $this->blocked_bots_table_name WHERE expires_at > %s ORDER BY blocked_at DESC";
-        $params = array( current_time( 'mysql' ) );
-        $formats = array( '%s' );
+        // phpcs:disable WordPress.DB.PreparedSQL.NotPrepared -- %i placeholder is valid since WordPress 6.2
+        $sql = "SELECT id, ip_address, blocked_at, expires_at FROM %i WHERE expires_at > %s ORDER BY blocked_at DESC";
+        $sql_params = array( $this->blocked_bots_table_name, current_time( 'mysql' ) );
 
         if ( $limit > 0 ) {
             $sql .= " LIMIT %d";
-            $params[] = $limit;
-            $formats[] = '%d';
+            $sql_params[] = $limit;
         }
         if ( $offset > 0 ) {
             $sql .= " OFFSET %d";
-            $params[] = $offset;
-            $formats[] = '%d';
+            $sql_params[] = $offset;
         }
 
         return $this->wpdb->get_results(
-            $this->wpdb->prepare( $sql, $params ),
+            $this->wpdb->prepare( $sql, ...$sql_params ),
             ARRAY_A
         );
+        // phpcs:enable WordPress.DB.PreparedSQL.NotPrepared
     }
 
     /**
@@ -190,13 +225,16 @@ class EDH_Database {
     public function is_bot_blocked( $ip_address ) {
         $this->clean_old_blocked_bots(); // Clean up before checking to ensure accuracy.
 
+        // phpcs:disable WordPress.DB.PreparedSQL.NotPrepared -- %i placeholder is valid since WordPress 6.2
         $result = $this->wpdb->get_var(
             $this->wpdb->prepare(
-                "SELECT COUNT(id) FROM $this->blocked_bots_table_name WHERE ip_address = %s AND expires_at > %s",
+                "SELECT COUNT(id) FROM %i WHERE ip_address = %s AND expires_at > %s",
+                $this->blocked_bots_table_name,
                 $ip_address,
                 current_time( 'mysql' )
             )
         );
+        // phpcs:enable WordPress.DB.PreparedSQL.NotPrepared
 
         return ( $result > 0 );
     }
@@ -209,13 +247,16 @@ class EDH_Database {
      */
     public function add_whitelisted_ip( $ip_address ) {
         // Using `INSERT IGNORE` to prevent errors if the IP is already present due to the UNIQUE KEY constraint.
+        // phpcs:disable WordPress.DB.PreparedSQL.NotPrepared -- %i placeholder is valid since WordPress 6.2
         $result = $this->wpdb->query(
             $this->wpdb->prepare(
-                "INSERT IGNORE INTO $this->whitelisted_ips_table_name (ip_address, added_at) VALUES (%s, %s)",
+                "INSERT IGNORE INTO %i (ip_address, added_at) VALUES (%s, %s)",
+                $this->whitelisted_ips_table_name,
                 $ip_address,
                 current_time( 'mysql' )
             )
         );
+        // phpcs:enable WordPress.DB.PreparedSQL.NotPrepared
 
         if ($result) {
             // Re-update .htaccess rules to ensure whitelisted IPs are not blocked by old rules, respecting the option.
@@ -252,10 +293,12 @@ class EDH_Database {
      * @return array An array of whitelisted IP records (id, ip_address, added_at).
      */
     public function get_whitelisted_ips() {
+        // phpcs:disable WordPress.DB.PreparedSQL.NotPrepared -- %i placeholder is valid since WordPress 6.2
         return $this->wpdb->get_results(
-            "SELECT id, ip_address, added_at FROM $this->whitelisted_ips_table_name ORDER BY added_at DESC",
+            $this->wpdb->prepare( "SELECT id, ip_address, added_at FROM %i ORDER BY added_at DESC", $this->whitelisted_ips_table_name ),
             ARRAY_A
         );
+        // phpcs:enable WordPress.DB.PreparedSQL.NotPrepared
     }
 
     /**
@@ -265,12 +308,15 @@ class EDH_Database {
      * @return bool True if the IP is whitelisted, false otherwise.
      */
     public function is_ip_whitelisted( $ip_address ) {
+        // phpcs:disable WordPress.DB.PreparedSQL.NotPrepared -- %i placeholder is valid since WordPress 6.2
         $result = $this->wpdb->get_var(
             $this->wpdb->prepare(
-                "SELECT COUNT(id) FROM $this->whitelisted_ips_table_name WHERE ip_address = %s",
+                "SELECT COUNT(id) FROM %i WHERE ip_address = %s",
+                $this->whitelisted_ips_table_name,
                 $ip_address
             )
         );
+        // phpcs:enable WordPress.DB.PreparedSQL.NotPrepared
 
         return ( $result > 0 );
     }
@@ -281,12 +327,15 @@ class EDH_Database {
      * And triggers an .htaccess update to remove expired blocks (if enabled).
      */
     public function clean_old_blocked_bots() {
+        // phpcs:disable WordPress.DB.PreparedSQL.NotPrepared -- %i placeholder is valid since WordPress 6.2
         $result = $this->wpdb->query(
             $this->wpdb->prepare(
-                "DELETE FROM $this->blocked_bots_table_name WHERE expires_at <= %s",
+                "DELETE FROM %i WHERE expires_at <= %s",
+                $this->blocked_bots_table_name,
                 current_time( 'mysql' )
             )
         );
+        // phpcs:enable WordPress.DB.PreparedSQL.NotPrepared
 
         if ( $result !== false && $result > 0 ) { // If any rows were deleted
             $this->update_htaccess_block_rules(); // Update .htaccess to remove expired blocks, respecting the option.
@@ -302,17 +351,27 @@ class EDH_Database {
         // Retrieve the current setting for .htaccess blocking. Defaults to 'no' if not set.
         $enable_htaccess_blocking = get_option( 'edhbb_enable_htaccess_blocking', 'no' ) === 'yes';
 
+        // Check if WP_Filesystem is available.
+        if ( null === $this->wp_filesystem ) {
+            if ( $enable_htaccess_blocking && defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG ) {
+                // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Only logs when WP_DEBUG_LOG is enabled
+                error_log( '[EDH Bad Bots] WP_Filesystem not available for .htaccess operations.' );
+            }
+            return;
+        }
+
         // Perform basic checks for .htaccess file existence and writability.
-        if ( ! file_exists( $this->htaccess_path ) || ! is_writable( $this->htaccess_path ) ) {
+        if ( ! $this->wp_filesystem->exists( $this->htaccess_path ) || ! $this->wp_filesystem->is_writable( $this->htaccess_path ) ) {
             // Log an error if .htaccess is expected but not found/writable.
-            if ( $enable_htaccess_blocking ) {
+            if ( $enable_htaccess_blocking && defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG ) {
+                // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Only logs when WP_DEBUG_LOG is enabled
                 error_log( '[EDH Bad Bots] .htaccess file not found or not writable at: ' . $this->htaccess_path );
             }
             return; // Cannot proceed if file is inaccessible.
         }
 
         // Get the current content of the .htaccess file.
-        $htaccess_content = file_get_contents( $this->htaccess_path );
+        $htaccess_content = $this->wp_filesystem->get_contents( $this->htaccess_path );
 
         // Define our unique markers for the plugin's block.
         $start_marker = '# BEGIN EDH Bad Bots Block';
@@ -356,7 +415,7 @@ class EDH_Database {
         }
 
         // Write the (potentially modified) content back to the .htaccess file.
-        file_put_contents( $this->htaccess_path, $htaccess_content );
+        $this->wp_filesystem->put_contents( $this->htaccess_path, $htaccess_content, FS_CHMOD_FILE );
     }
 
     /**
@@ -376,12 +435,17 @@ class EDH_Database {
             return; // Do nothing if option is off and not forced.
         }
 
+        // Check if WP_Filesystem is available.
+        if ( null === $this->wp_filesystem ) {
+            return;
+        }
+
         // Check file accessibility.
-        if ( ! file_exists( $this->htaccess_path ) || ! is_writable( $this->htaccess_path ) ) {
+        if ( ! $this->wp_filesystem->exists( $this->htaccess_path ) || ! $this->wp_filesystem->is_writable( $this->htaccess_path ) ) {
             return; // Cannot remove if file is inaccessible.
         }
 
-        $htaccess_content = file_get_contents( $this->htaccess_path );
+        $htaccess_content = $this->wp_filesystem->get_contents( $this->htaccess_path );
 
         $start_marker = '# BEGIN EDH Bad Bots Block';
         $end_marker = '# END EDH Bad Bots Block';
@@ -389,7 +453,7 @@ class EDH_Database {
         // Remove the entire block if it exists within the file.
         if ( strpos( $htaccess_content, $start_marker ) !== false ) {
             $htaccess_content = preg_replace( "/{$start_marker}.*?{$end_marker}\s*/s", '', $htaccess_content );
-            file_put_contents( $this->htaccess_path, $htaccess_content ); // Write back the cleaned content.
+            $this->wp_filesystem->put_contents( $this->htaccess_path, $htaccess_content, FS_CHMOD_FILE ); // Write back the cleaned content.
         }
     }
 }

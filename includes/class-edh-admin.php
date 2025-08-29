@@ -112,30 +112,38 @@ class EDH_Admin {
      */
     public function handle_add_whitelist_ip() {
         // Verify nonce for security.
-        if ( ! isset( $_POST['_wpnonce'] ) || ! wp_verify_nonce( $_POST['_wpnonce'], 'edhbb_add_whitelist_ip_nonce' ) ) {
-            wp_die( __( 'Security check failed.', 'edh-bad-bots' ) );
+        if ( ! isset( $_POST['_wpnonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ) ), 'edhbb_add_whitelist_ip_nonce' ) ) {
+            wp_die( esc_html__( 'Security check failed.', 'edh-bad-bots' ) );
         }
 
         // Check user capabilities.
         if ( ! current_user_can( 'manage_options' ) ) {
-            wp_die( __( 'You do not have sufficient permissions to access this page.', 'edh-bad-bots' ) );
+            wp_die( esc_html__( 'You do not have sufficient permissions to access this page.', 'edh-bad-bots' ) );
         }
 
-        $ip_address = isset( $_POST['edhbb_whitelist_ip'] ) ? sanitize_text_field( $_POST['edhbb_whitelist_ip'] ) : '';
+        $ip_address = isset( $_POST['edhbb_whitelist_ip'] ) ? sanitize_text_field( wp_unslash( $_POST['edhbb_whitelist_ip'] ) ) : '';
 
         if ( filter_var( $ip_address, FILTER_VALIDATE_IP ) ) {
             if ( $this->db->add_whitelisted_ip( $ip_address ) ) {
                 add_settings_error(
                     'edhbb_messages',
                     'edhbb_ip_added',
-                    sprintf( __( 'IP address %s added to whitelist.', 'edh-bad-bots' ), esc_html( $ip_address ) ),
+                    sprintf(
+                        /* translators: %s: IP address */
+                        __( 'IP address %s added to whitelist.', 'edh-bad-bots' ),
+                        esc_html( $ip_address )
+                    ),
                     'success'
                 );
             } else {
                 add_settings_error(
                     'edhbb_messages',
                     'edhbb_ip_add_fail',
-                    sprintf( __( 'Failed to add IP address %s to whitelist (it might already exist).', 'edh-bad-bots' ), esc_html( $ip_address ) ),
+                    sprintf(
+                        /* translators: %s: IP address */
+                        __( 'Failed to add IP address %s to whitelist (it might already exist).', 'edh-bad-bots' ),
+                        esc_html( $ip_address )
+                    ),
                     'error'
                 );
             }
@@ -143,7 +151,7 @@ class EDH_Admin {
             add_settings_error(
                 'edhbb_messages',
                 'edhbb_ip_invalid',
-                __( 'Invalid IP address provided for whitelist.', 'edh-bad-bots' ),
+                esc_html__( 'Invalid IP address provided for whitelist.', 'edh-bad-bots' ),
                 'error'
             );
         }
@@ -159,30 +167,38 @@ class EDH_Admin {
      */
     public function handle_remove_whitelist_ip() {
         // Verify nonce for security.
-        if ( ! isset( $_POST['_wpnonce'] ) || ! wp_verify_nonce( $_POST['_wpnonce'], 'edhbb_remove_whitelist_ip_nonce' ) ) {
-            wp_die( __( 'Security check failed.', 'edh-bad-bots' ) );
+        if ( ! isset( $_POST['_wpnonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ) ), 'edhbb_remove_whitelist_ip_nonce' ) ) {
+            wp_die( esc_html__( 'Security check failed.', 'edh-bad-bots' ) );
         }
 
         // Check user capabilities.
         if ( ! current_user_can( 'manage_options' ) ) {
-            wp_die( __( 'You do not have sufficient permissions to access this page.', 'edh-bad-bots' ) );
+            wp_die( esc_html__( 'You do not have sufficient permissions to access this page.', 'edh-bad-bots' ) );
         }
 
-        $ip_address = isset( $_POST['edhbb_whitelist_ip'] ) ? sanitize_text_field( $_POST['edhbb_whitelist_ip'] ) : '';
+        $ip_address = isset( $_POST['edhbb_whitelist_ip'] ) ? sanitize_text_field( wp_unslash( $_POST['edhbb_whitelist_ip'] ) ) : '';
 
         if ( filter_var( $ip_address, FILTER_VALIDATE_IP ) ) {
             if ( $this->db->remove_whitelisted_ip( $ip_address ) ) {
                 add_settings_error(
                     'edhbb_messages',
                     'edhbb_ip_removed',
-                    sprintf( __( 'IP address %s removed from whitelist.', 'edh-bad-bots' ), esc_html( $ip_address ) ),
+                    sprintf(
+                        /* translators: %s: IP address */
+                        __( 'IP address %s removed from whitelist.', 'edh-bad-bots' ),
+                        esc_html( $ip_address )
+                    ),
                     'success'
                 );
             } else {
                 add_settings_error(
                     'edhbb_messages',
                     'edhbb_ip_remove_fail',
-                    sprintf( __( 'Failed to remove IP address %s from whitelist.', 'edh-bad-bots' ), esc_html( $ip_address ) ),
+                    sprintf(
+                        /* translators: %s: IP address */
+                        __( 'Failed to remove IP address %s from whitelist.', 'edh-bad-bots' ),
+                        esc_html( $ip_address )
+                    ),
                     'error'
                 );
             }
@@ -190,7 +206,7 @@ class EDH_Admin {
             add_settings_error(
                 'edhbb_messages',
                 'edhbb_ip_invalid',
-                __( 'Invalid IP address provided for whitelist removal.', 'edh-bad-bots' ),
+                esc_html__( 'Invalid IP address provided for whitelist removal.', 'edh-bad-bots' ),
                 'error'
             );
         }
@@ -206,30 +222,38 @@ class EDH_Admin {
      */
     public function handle_remove_blocked_bot() {
         // Verify nonce for security.
-        if ( ! isset( $_POST['_wpnonce'] ) || ! wp_verify_nonce( $_POST['_wpnonce'], 'edhbb_remove_blocked_bot_nonce' ) ) {
-            wp_die( __( 'Security check failed.', 'edh-bad-bots' ) );
+        if ( ! isset( $_POST['_wpnonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ) ), 'edhbb_remove_blocked_bot_nonce' ) ) {
+            wp_die( esc_html__( 'Security check failed.', 'edh-bad-bots' ) );
         }
 
         // Check user capabilities.
         if ( ! current_user_can( 'manage_options' ) ) {
-            wp_die( __( 'You do not have sufficient permissions to access this page.', 'edh-bad-bots' ) );
+            wp_die( esc_html__( 'You do not have sufficient permissions to access this page.', 'edh-bad-bots' ) );
         }
 
-        $ip_address = isset( $_POST['edhbb_blocked_bot_ip'] ) ? sanitize_text_field( $_POST['edhbb_blocked_bot_ip'] ) : '';
+        $ip_address = isset( $_POST['edhbb_blocked_bot_ip'] ) ? sanitize_text_field( wp_unslash( $_POST['edhbb_blocked_bot_ip'] ) ) : '';
 
         if ( filter_var( $ip_address, FILTER_VALIDATE_IP ) ) {
             if ( $this->db->remove_blocked_bot( $ip_address ) ) {
                 add_settings_error(
                     'edhbb_messages',
                     'edhbb_bot_unblocked',
-                    sprintf( __( 'Bot IP address %s unblocked.', 'edh-bad-bots' ), esc_html( $ip_address ) ),
+                    sprintf(
+                        /* translators: %s: IP address */
+                        __( 'Bot IP address %s unblocked.', 'edh-bad-bots' ),
+                        esc_html( $ip_address )
+                    ),
                     'success'
                 );
             } else {
                 add_settings_error(
                     'edhbb_messages',
                     'edhbb_bot_unblock_fail',
-                    sprintf( __( 'Failed to unblock bot IP address %s.', 'edh-bad-bots' ), esc_html( $ip_address ) ),
+                    sprintf(
+                        /* translators: %s: IP address */
+                        __( 'Failed to unblock bot IP address %s.', 'edh-bad-bots' ),
+                        esc_html( $ip_address )
+                    ),
                     'error'
                 );
             }
@@ -237,7 +261,7 @@ class EDH_Admin {
             add_settings_error(
                 'edhbb_messages',
                 'edhbb_ip_invalid',
-                __( 'Invalid IP address provided for bot unblock.', 'edh-bad-bots' ),
+                esc_html__( 'Invalid IP address provided for bot unblock.', 'edh-bad-bots' ),
                 'error'
             );
         }
@@ -253,13 +277,13 @@ class EDH_Admin {
      */
     public function handle_save_options() {
         // Verify nonce for security.
-        if ( ! isset( $_POST['_wpnonce'] ) || ! wp_verify_nonce( $_POST['_wpnonce'], 'edhbb_save_options_nonce' ) ) {
-            wp_die( __( 'Security check failed.', 'edh-bad-bots' ) );
+        if ( ! isset( $_POST['_wpnonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ) ), 'edhbb_save_options_nonce' ) ) {
+            wp_die( esc_html__( 'Security check failed.', 'edh-bad-bots' ) );
         }
 
         // Check user capabilities.
         if ( ! current_user_can( 'manage_options' ) ) {
-            wp_die( __( 'You do not have sufficient permissions to access this page.', 'edh-bad-bots' ) );
+            wp_die( esc_html__( 'You do not have sufficient permissions to access this page.', 'edh-bad-bots' ) );
         }
 
         // Get the value of the .htaccess blocking checkbox.
@@ -269,7 +293,7 @@ class EDH_Admin {
         update_option( 'edhbb_enable_htaccess_blocking', $enable_htaccess_blocking );
 
         // Get and sanitize the block duration.
-        $block_duration_days = isset( $_POST['edhbb_block_duration_days'] ) ? absint( $_POST['edhbb_block_duration_days'] ) : 30;
+        $block_duration_days = isset( $_POST['edhbb_block_duration_days'] ) ? absint( wp_unslash( $_POST['edhbb_block_duration_days'] ) ) : 30;
         if ( $block_duration_days < 1 ) {
             $block_duration_days = 30; // Reset to default if value is invalid.
         }
@@ -284,7 +308,7 @@ class EDH_Admin {
         add_settings_error(
             'edhbb_messages',
             'edhbb_options_saved',
-            __( 'Plugin options saved.', 'edh-bad-bots' ),
+            esc_html__( 'Plugin options saved.', 'edh-bad-bots' ),
             'success'
         );
 
