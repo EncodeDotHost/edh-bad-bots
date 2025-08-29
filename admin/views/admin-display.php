@@ -180,6 +180,15 @@ $block_duration_days = get_option( 'edhbb_block_duration_days', 30 );
                 </form>
             </div>
         <?php elseif ( $active_tab == 'help' ) : ?>
+            <?php
+            // Generate the trap URL to display in the help text.
+            $site_url_parts = parse_url( site_url() );
+            $host = $site_url_parts['host'];
+            $scheme = $site_url_parts['scheme'];
+            $hash = wp_hash( 'site-' . $host . '-disallow-rule-' . $scheme );
+            $path = !empty($site_url_parts['path']) ? $site_url_parts['path'] : '';
+            $trap_url = esc_url( home_url( $path . '/' . $hash . '/' ) );
+            ?>
             <!-- Section for Help Text -->
             <div class="card">
                 <h2 class="title"><?php esc_html_e( 'How EDH Bad Bots Works', 'edh-bad-bots' ); ?></h2>
@@ -223,6 +232,21 @@ $block_duration_days = get_option( 'edhbb_block_duration_days', 30 );
                         <?php esc_html_e( 'On the "Options" tab, you can choose to enable or disable server-level IP blocking via the .htaccess file. If disabled, blocking will rely solely on PHP, which might be less effective with caching plugins.', 'edh-bad-bots' ); ?>
                     </li>
                 </ul>
+
+                <h3><?php esc_html_e( 'Caching Plugin Exclusion:', 'edh-bad-bots' ); ?></h3>
+                <p>
+                    <?php esc_html_e( 'To ensure that the bot trap works correctly, you **must** exclude the following unique URL from your caching plugin. This prevents the trap page from being cached and served to human visitors.', 'edh-bad-bots' ); ?>
+                </p>
+                <p>
+                    <strong><?php esc_html_e( 'Your unique trap URL is:', 'edh-bad-bots' ); ?></strong>
+                </p>
+                <p>
+                    <code><?php echo $trap_url; ?></code>
+                </p>
+                <p>
+                    <?php esc_html_e( 'Please refer to your caching plugin\'s documentation for instructions on how to exclude a URL.', 'edh-bad-bots' ); ?>
+                </p>
+
             </div>
         <?php endif; ?>
     </div><!-- .tab-content -->

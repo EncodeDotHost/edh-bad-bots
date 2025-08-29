@@ -160,6 +160,10 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## Changelog
 
+### Version 1.2.3
+ - Added instructions to the "Help" tab for excluding the unique trap URL from caching plugins.
+
+
 ### Version 1.2.2
 - **Fix**: Block duration is now a configurable setting
 
@@ -241,7 +245,7 @@ Yes! Add your IP address to the whitelist in the admin panel to ensure you're ne
 The plugin is designed for minimal performance impact. Server-level `.htaccess` blocking actually improves performance by stopping blocked requests before they reach PHP. Database operations are optimized with automatic cleanup.
 
 ### Will this work with caching plugins?
-Yes! Server-level `.htaccess` blocking bypasses caching entirely, ensuring blocked bots are stopped immediately. PHP-level blocking may be affected by some caching configurations.
+Yes! Server-level `.htaccess` blocking bypasses caching entirely, ensuring blocked bots are stopped immediately. PHP-level blocking may be affected by some caching configurations. To ensure the bot trap works correctly, you should exclude the unique trap URL from your caching plugin. You can find this URL in the "Help" tab of the plugin's settings.
 
 ### What happens if I deactivate the plugin?
 The blocking stops immediately and `.htaccess` rules are automatically cleaned up. Your data (blocked IPs and whitelist) is preserved in case you reactivate the plugin later.
