@@ -22,6 +22,7 @@ $active_tab = isset( $_GET['tab'] ) ? sanitize_text_field( $_GET['tab'] ) : 'whi
 
 // Get current option for .htaccess blocking
 $enable_htaccess_blocking = get_option( 'edhbb_enable_htaccess_blocking', 'no' ) === 'yes';
+$block_duration_days = get_option( 'edhbb_block_duration_days', 30 );
 
 ?>
 
@@ -162,6 +163,17 @@ $enable_htaccess_blocking = get_option( 'edhbb_enable_htaccess_blocking', 'no' )
                                     </p>
                                 </td>
                             </tr>
+                            <tr>
+                                <th scope="row">
+                                    <label for="edhbb_block_duration_days"><?php esc_html_e( 'Block Duration', 'edh-bad-bots' ); ?></label>
+                                </th>
+                                <td>
+                                    <input type="number" id="edhbb_block_duration_days" name="edhbb_block_duration_days" value="<?php echo esc_attr( $block_duration_days ); ?>" class="small-text" min="1" />
+                                    <p class="description">
+                                        <?php esc_html_e( 'Number of days to block a bot\'s IP address.', 'edh-bad-bots' ); ?>
+                                    </p>
+                                </td>
+                            </tr>
                         </tbody>
                     </table>
                     <?php submit_button( __( 'Save Options', 'edh-bad-bots' ), 'primary', 'submit_options' ); ?>
@@ -199,11 +211,11 @@ $enable_htaccess_blocking = get_option( 'edhbb_enable_htaccess_blocking', 'no' )
                 <h3><?php esc_html_e( 'Managing IPs:', 'edh-bad-bots' ); ?></h3>
                 <ul>
                     <li>
-                        <strong><?php esc_html_e( 'Whitelisted IPs:', 'edh-bad-bots' ); ?></strong>
+                        <strong><?php esc_html_e( 'Whitelisted IPs', 'edh-bad-bots' ); ?></strong>
                         <?php esc_html_e( 'IP addresses added to the whitelist will **never** be blocked, even if they hit the bot trap. Use this for your own IP address, trusted services, or known legitimate bots.', 'edh-bad-bots' ); ?>
                     </li>
                     <li>
-                        <strong><?php esc_html_e( 'Blocked Bots:', 'edh-bad-bots' ); ?></strong>
+                        <strong><?php esc_html_e( 'Blocked Bots', 'edh-bad-bots' ); ?></strong>
                         <?php esc_html_e( 'This tab shows all IP addresses currently on the blocklist. IPs are automatically removed after 30 days, but you can manually unblock them here at any time.', 'edh-bad-bots' ); ?>
                     </li>
                     <li>

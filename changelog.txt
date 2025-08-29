@@ -1,3 +1,8 @@
+1.2.2 Block duration is now a configurable setting
+1.2.1 Fixing apache error doc
+1.2.0 Added custom error page
+1.1.2 Now adding htaccess rule at top of file
+1.1.1 Trigger htaccess rules to have higher priority
 1.1.0 Major Feature Release: Server-Level Blocking & Enhanced Admin Interface
 - Added server-level IP blocking via .htaccess file management
 - New "Options" tab in admin interface for configurable blocking methods

@@ -266,10 +266,14 @@ class EDH_Admin {
         // If the checkbox is checked, $_POST['edhbb_enable_htaccess_blocking'] will be 'yes'.
         // If unchecked, it won't be set, so we default to 'no'.
         $enable_htaccess_blocking = isset( $_POST['edhbb_enable_htaccess_blocking'] ) ? 'yes' : 'no';
-
-        // Update the WordPress option.
-        // update_option() will add the option if it doesn't exist or update it if it does.
         update_option( 'edhbb_enable_htaccess_blocking', $enable_htaccess_blocking );
+
+        // Get and sanitize the block duration.
+        $block_duration_days = isset( $_POST['edhbb_block_duration_days'] ) ? absint( $_POST['edhbb_block_duration_days'] ) : 30;
+        if ( $block_duration_days < 1 ) {
+            $block_duration_days = 30; // Reset to default if value is invalid.
+        }
+        update_option( 'edhbb_block_duration_days', $block_duration_days );
 
         // After updating the option, trigger an .htaccess update.
         // The update_htaccess_block_rules method in EDH_Database will read the new option

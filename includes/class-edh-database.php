@@ -12,7 +12,7 @@ class EDH_Database {
     private $wpdb;
     private $blocked_bots_table_name;
     private $whitelisted_ips_table_name;
-    private $block_duration_days = 30; // Number of days an IP remains blocked
+    private $block_duration_days; // Number of days an IP remains blocked
     private $htaccess_path; // Path to the .htaccess file
 
     /**
@@ -24,6 +24,7 @@ class EDH_Database {
         $this->wpdb = $wpdb;
         $this->blocked_bots_table_name = $this->wpdb->prefix . 'edhbb_blocked_bots';
         $this->whitelisted_ips_table_name = $this->wpdb->prefix . 'edhbb_whitelisted_ips';
+        $this->block_duration_days = get_option( 'edhbb_block_duration_days', 30 );
         $this->htaccess_path = ABSPATH . '.htaccess'; // Path to root .htaccess
     }
 
@@ -34,7 +35,7 @@ class EDH_Database {
     public function create_tables() {
         // Load the upgrade.php file for dbDelta function.
         if ( ! function_exists( 'dbDelta' ) ) {
-            require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+            require_once ABSPATH . 'wp-admin/includes/upgrade';
         }
 
         // Character set and collate for the tables.
@@ -298,8 +299,8 @@ class EDH_Database {
      * or the .htaccess blocking option is toggled.
      */
     public function update_htaccess_block_rules() {
-        // Retrieve the current setting for .htaccess blocking. Defaults to 'yes' if not set.
-        $enable_htaccess_blocking = get_option( 'edhbb_enable_htaccess_blocking', 'yes' ) === 'yes';
+        // Retrieve the current setting for .htaccess blocking. Defaults to 'no' if not set.
+        $enable_htaccess_blocking = get_option( 'edhbb_enable_htaccess_blocking', 'no' ) === 'yes';
 
         // Perform basic checks for .htaccess file existence and writability.
         if ( ! file_exists( $this->htaccess_path ) || ! is_writable( $this->htaccess_path ) ) {
@@ -320,7 +321,7 @@ class EDH_Database {
         // Always remove any existing block first. This ensures we start clean before potentially adding new rules
         // or leaving the block empty if the option is disabled.
         if ( strpos( $htaccess_content, $start_marker ) !== false ) {
-            $htaccess_content = preg_replace( "/$start_marker.*?$end_marker\s*/s", '', $htaccess_content );
+            $htaccess_content = preg_replace( "/{$start_marker}.*?{$end_marker}\s*/s", '', $htaccess_content );
         }
 
         // Only generate and insert new rules if the 'enable_htaccess_blocking' option is active.
@@ -339,7 +340,7 @@ class EDH_Database {
             $new_rules = '';
             // If there are IPs to block, generate the .htaccess rules.
             if ( ! empty( $blocked_ips_for_htaccess ) ) {
-                $new_rules .= "\n{$start_marker}\n"; // Add our start marker
+                $new_rules .= "{$start_marker}\n"; // Add our start marker
                 $new_rules .= "<Limit GET POST HEAD>\n"; // Apply rules to specific HTTP methods
                 $new_rules .= "Order Allow,Deny\n"; // Define the order of processing
                 $new_rules .= "Allow from All\n"; // Allow all by default...
@@ -347,15 +348,10 @@ class EDH_Database {
                     $new_rules .= "Deny from " . $ip . "\n"; // ...then deny specific IPs
                 }
                 $new_rules .= "</Limit>\n";
-                $new_rules .= "{$end_marker}\n"; // Add our end marker
+                $new_rules .= "{$end_marker}\n\n"; // Add our end marker and an extra newline
 
-                // Find the WordPress block marker and insert our rules before it,
-                // or append them to the end of the file if the WordPress block isn't found.
-                if ( strpos( $htaccess_content, '# BEGIN WordPress' ) !== false ) {
-                    $htaccess_content = str_replace( '# BEGIN WordPress', $new_rules . '# BEGIN WordPress', $htaccess_content );
-                } else {
-                    $htaccess_content .= $new_rules;
-                }
+                // Insert the new rules at the very beginning of the .htaccess file.
+                $htaccess_content = $new_rules . $htaccess_content;
             }
         }
 
@@ -372,7 +368,7 @@ class EDH_Database {
      */
     private function remove_htaccess_block_rules( $force_remove = false ) {
         // Get the current option status.
-        $enable_htaccess_blocking = get_option( 'edhbb_enable_htaccess_blocking', 'yes' ) === 'yes';
+        $enable_htaccess_blocking = get_option( 'edhbb_enable_htaccess_blocking', 'no' ) === 'yes';
 
         // Only remove rules if .htaccess blocking is currently enabled,
         // or if explicitly told to force removal (e.g., during plugin deactivation).
@@ -392,7 +388,7 @@ class EDH_Database {
 
         // Remove the entire block if it exists within the file.
         if ( strpos( $htaccess_content, $start_marker ) !== false ) {
-            $htaccess_content = preg_replace( "/$start_marker.*?$end_marker\s*/s", '', $htaccess_content );
+            $htaccess_content = preg_replace( "/{$start_marker}.*?{$end_marker}\s*/s", '', $htaccess_content );
             file_put_contents( $this->htaccess_path, $htaccess_content ); // Write back the cleaned content.
         }
     }

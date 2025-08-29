@@ -3,13 +3,13 @@
  * Plugin Name: EDH Bad Bots
  * Plugin URI: https://github.com/EncodeDotHost/edh-bad-bots
  * Description: This plugin is used to block bots that don't honor the robots.txt file from the site.
- * Version: 1.1.0
+ * Version: 1.2.2
  * Author: EncodeDotHost
  * Author URI: https://encode.host
  * Contributor: @EncodeDotHost, @nbwpuk
  * License: GPL v3 or later
- * PHP: 5.6 or greater
- * WordPress: 4.4 or greater
+ * Requires at least: 4.4
+ * Requires PHP: 5.6
  * Tested up to: 6.8.2
  */
 
@@ -21,7 +21,7 @@
  */
 define( 'EDHBB_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'EDHBB_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
-define( 'EDHBB_VERSION', '1.1.0' );
+define( 'EDHBB_VERSION', '1.2.1' );
 
 /**
  * Include core plugin files.

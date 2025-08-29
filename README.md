@@ -160,6 +160,21 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## Changelog
 
+### Version 1.2.2
+- **Fix**: Block duration is now a configurable setting
+
+### Version 1.2.1
+- **Fix**: Fixing apache error doc
+
+### Version 1.2.0
+- **New**: Added custom error page
+
+### Version 1.1.2
+- **Fix**: Now adding htaccess rule at top of file
+
+### Version 1.1.1
+- **Fix**: Trigger htaccess rules to have higher priority
+
 ### Version 1.1.0 - Major Feature Release
 - **New**: Server-level IP blocking via `.htaccess` file management
 - **New**: "Options" tab in admin interface for configurable blocking methods
