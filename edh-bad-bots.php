@@ -3,10 +3,10 @@
  * Plugin Name: EDH Bad Bots
  * Plugin URI: https://github.com/EncodeDotHost/edh-bad-bots
  * Description: This plugin is used to block bots that don't honor the robots.txt file from the site.
- * Version: 1.3.0
+ * Version: 1.4.0
  * Requires at least: 6.2
- * Requires PHP: 5.6
- * Tested up to: 6.8.2
+ * Requires PHP: 7.4
+ * Tested up to: 6.8
  * Author: EncodeDotHost
  * Author URI: https://encode.host
  * Contributor: EncodeDotHost, nbwpuk
@@ -16,7 +16,7 @@
  * @package edh-bad-bots
  * @author EncodeDotHost
  * @contributor nbwpuk
- * @version 1.3.0
+ * @version 1.4.0
  * @link https://github.com/EncodeDotHost/edh-bad-bots
  * @license GPL v3 or later
  */
@@ -29,16 +29,16 @@
  */
 define( 'EDHBB_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'EDHBB_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
-define( 'EDHBB_VERSION', '1.3.0' );
+define( 'EDHBB_VERSION', '1.4.0' );
 
 /**
  * Include core plugin files.
  * These files contain the main logic and classes for the plugin.
  * Ensure the order of inclusion if there are dependencies (e.g., database before blocker).
  */
-require_once EDHBB_PLUGIN_DIR . 'includes/class-edh-database.php';
-require_once EDHBB_PLUGIN_DIR . 'includes/class-edh-blocker.php';
-require_once EDHBB_PLUGIN_DIR . 'includes/class-edh-admin.php';
+require_once EDHBB_PLUGIN_DIR . 'includes/class-edhbb-database.php';
+require_once EDHBB_PLUGIN_DIR . 'includes/class-edhbb-blocker.php';
+require_once EDHBB_PLUGIN_DIR . 'includes/class-edhbb-admin.php';
 
 /**
  * Register plugin activation and deactivation hooks.
@@ -53,7 +53,7 @@ register_deactivation_hook( __FILE__, 'edhbb_deactivate_plugin' );
  */
 function edhbb_activate_plugin() {
     // Instantiate the database class and create tables.
-    $edh_database = new EDH_Database();
+    $edh_database = new EDHBB_Database();
     $edh_database->create_tables();
 
     // You might also set up initial options here if needed.
@@ -66,7 +66,7 @@ function edhbb_activate_plugin() {
 function edhbb_deactivate_plugin() {
     // Optionally, you can drop tables here. Be cautious with this as users might want to reactivate.
     // For now, we'll leave it empty to preserve data on deactivation.
-    // $edh_database = new EDH_Database();
+    // $edh_database = new EDHBB_Database();
     // $edh_database->drop_tables();
 }
 
@@ -75,9 +75,9 @@ function edhbb_deactivate_plugin() {
  * This function ensures that all parts of the plugin are loaded and ready to go.
  */
 function edhbb_init_plugin() {
-    $edh_database = new EDH_Database();
-    $edh_blocker = new EDH_Blocker( $edh_database ); // Pass database instance to blocker
-    $edh_admin = new EDH_Admin( $edh_database );     // Pass database instance to admin
+    $edh_database = new EDHBB_Database();
+    $edh_blocker = new EDHBB_Blocker( $edh_database ); // Pass database instance to blocker
+    $edh_admin = new EDHBB_Admin( $edh_database );     // Pass database instance to admin
 
     // Any other initializations can go here.
 }

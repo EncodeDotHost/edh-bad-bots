@@ -7,17 +7,17 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit; // Exit if accessed directly
 
-class EDH_Blocker {
+class EDHBB_Blocker {
 
-    private $db; // Instance of EDH_Database class
+    private $db; // Instance of EDHBB_Database class
     private $trap_url_hash; // The unique hash for the bot trap URL
 
     /**
-     * Constructor for the EDH_Blocker class.
+     * Constructor for the EDHBB_Blocker class.
      *
-     * @param EDH_Database $db An instance of the EDH_Database class.
+     * @param EDHBB_Database $db An instance of the EDHBB_Database class.
      */
-    public function __construct( EDH_Database $db ) {
+    public function __construct( EDHBB_Database $db ) {
         $this->db = $db;
         $this->trap_url_hash = $this->generate_trap_url_hash();
 

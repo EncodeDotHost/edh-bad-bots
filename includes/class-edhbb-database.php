@@ -7,7 +7,7 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit; // Exit if accessed directly
 
-class EDH_Database {
+class EDHBB_Database {
 
     private $wpdb;
     private $blocked_bots_table_name;
@@ -17,7 +17,7 @@ class EDH_Database {
     private $wp_filesystem; // WP_Filesystem instance
 
     /**
-     * Constructor for the EDH_Database class.
+     * Constructor for the EDHBB_Database class.
      * Initializes the WordPress database object and sets table names.
      */
     public function __construct() {

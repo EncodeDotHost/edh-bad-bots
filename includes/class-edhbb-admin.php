@@ -8,17 +8,17 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit; // Exit if accessed directly
 
-class EDH_Admin {
+class EDHBB_Admin {
 
-    private $db; // Instance of EDH_Database class
+    private $db; // Instance of EDHBB_Database class
     private $admin_page_slug = 'edh-bad-bots-settings'; // Unique slug for the admin page
 
     /**
-     * Constructor for the EDH_Admin class.
+     * Constructor for the EDHBB_Admin class.
      *
-     * @param EDH_Database $db An instance of the EDH_Database class.
+     * @param EDHBB_Database $db An instance of the EDHBB_Database class.
      */
-    public function __construct( EDH_Database $db ) {
+    public function __construct( EDHBB_Database $db ) {
         $this->db = $db;
 
         // Add the admin menu page.

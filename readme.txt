@@ -2,9 +2,9 @@
 Contributors: EncodeDotHost, nbwpuk
 Tags: Security, Bots
 Requires at least: 6.2
-Tested up to: 8.6.2
-Stable tag: 6.2
-Requires PHP: 5.6
+Tested up to: 6.8
+Stable tag: 1.4.0
+Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -167,6 +167,11 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 3. Activate the plugin and test your changes
 
 ## Changelog
+
+### Version 1.4.0
+- Refactored all class names to use the `EDHBB_` prefix to prevent conflicts.
+- Updated the "Tested up to" WordPress version to 6.8.
+- Corrected the "Requires PHP" version to 7.4 for consistency.
 
 ### Version 1.3.0
  - Bringing up to WordPress coding standards
