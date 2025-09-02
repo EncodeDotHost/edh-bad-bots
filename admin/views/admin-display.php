@@ -8,8 +8,8 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit; // Exit if accessed directly
 
-// Ensure $db is available from the calling context (EDH_Admin::render_admin_page()).
-if ( ! isset( $db ) || ! ( $db instanceof EDH_Database ) ) {
+// Ensure $db is available from the calling context (EDHBB_Admin::render_admin_page()).
+if ( ! isset( $db ) || ! ( $db instanceof EDHBB_Database ) ) {
     return; // Safety check
 }
 

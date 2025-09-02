@@ -3,7 +3,7 @@ Contributors: EncodeDotHost, nbwpuk
 Tags: Security, Bots
 Requires at least: 6.2
 Tested up to: 6.8
-Stable tag: 1.4.0
+Stable tag: 1.4.2
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -167,6 +167,12 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 3. Activate the plugin and test your changes
 
 ## Changelog
+
+### Version 1.4.2
+ - Fixed Internal.LineEndings.Mixed in class-edhbb-blocker.php
+
+### Version 1.4.1
+ - Fixed blank admin page
 
 ### Version 1.4.0
 - Refactored all class names to use the `EDHBB_` prefix to prevent conflicts.
