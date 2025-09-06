@@ -4,6 +4,7 @@
  *
  * Handles all database interactions for storing blocked bots and whitelisted IPs.
  */
+declare(strict_types=1);
 
 if ( ! defined( 'ABSPATH' ) ) exit; // Exit if accessed directly
 
@@ -66,14 +67,16 @@ class EDHBB_Database {
          * Stores IP addresses of bots that have hit the trap URL.
          * - id: Primary key.
          * - ip_address: The IP address of the blocked bot.
+         * - hostname: The hostname of the blocked bot.
          * - blocked_at: Timestamp when the bot was blocked.
          * - expires_at: Timestamp when the block will expire (30 days after blocked_at).
          */
         // phpcs:disable WordPress.DB.PreparedSQL.NotPrepared -- %i placeholder is valid since WordPress 6.2
         $sql_blocked_bots = $this->wpdb->prepare(
-            "CREATE TABLE IF NOT EXISTS %i (
+            "CREATE TABLE %i (
                 id bigint(20) NOT NULL AUTO_INCREMENT,
                 ip_address varchar(45) NOT NULL,
+                hostname varchar(255) DEFAULT NULL,
                 blocked_at datetime NOT NULL,
                 expires_at datetime NOT NULL,
                 PRIMARY KEY (id),
@@ -92,7 +95,7 @@ class EDHBB_Database {
          */
         // phpcs:disable WordPress.DB.PreparedSQL.NotPrepared -- %i placeholder is valid since WordPress 6.2
         $sql_whitelisted_ips = $this->wpdb->prepare(
-            "CREATE TABLE IF NOT EXISTS %i (
+            "CREATE TABLE %i (
                 id bigint(20) NOT NULL AUTO_INCREMENT,
                 ip_address varchar(45) NOT NULL,
                 added_at datetime NOT NULL,
@@ -107,8 +110,81 @@ class EDHBB_Database {
         dbDelta( $sql_blocked_bots );
         dbDelta( $sql_whitelisted_ips );
 
+        // Run database migrations for existing installations
+        $this->migrate_database();
+
         // Ensure .htaccess rules are up-to-date on activation, respecting the option flag
         $this->update_htaccess_block_rules();
+    }
+
+    /**
+     * Handles database migrations for existing installations.
+     * Adds missing columns to existing tables.
+     */
+    private function migrate_database() {
+        // Check if hostname column exists in blocked_bots table
+        // phpcs:disable WordPress.DB.PreparedSQL.NotPrepared -- INFORMATION_SCHEMA queries require literal DB_NAME constant and table names
+        $column_exists = $this->wpdb->get_results(
+            $this->wpdb->prepare(
+                "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS 
+                 WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s AND COLUMN_NAME = 'hostname'",
+                DB_NAME,
+                $this->blocked_bots_table_name
+            )
+        );
+        // phpcs:enable WordPress.DB.PreparedSQL.NotPrepared
+
+        // If hostname column doesn't exist, add it
+        if ( empty( $column_exists ) ) {
+            // phpcs:disable WordPress.DB.PreparedSQL.NotPrepared -- %i placeholder is valid since WordPress 6.2
+            $result = $this->wpdb->query(
+                $this->wpdb->prepare(
+                    "ALTER TABLE %i ADD COLUMN hostname varchar(255) DEFAULT NULL AFTER ip_address",
+                    $this->blocked_bots_table_name
+                )
+            );
+            // phpcs:enable WordPress.DB.PreparedSQL.NotPrepared
+
+            // Log any errors if WP_DEBUG_LOG is enabled
+            if ( $result === false && defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG ) {
+                // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Only logs when WP_DEBUG_LOG is enabled
+                error_log( '[EDH Bad Bots] Failed to add hostname column to blocked_bots table. Error: ' . $this->wpdb->last_error );
+            }
+        }
+    }
+
+    /**
+     * Public method to trigger database migrations manually.
+     * This can be called from admin interfaces or other parts of the plugin.
+     * 
+     * @return bool True if migration was successful or not needed, false on failure.
+     */
+    public function run_migrations() {
+        $this->migrate_database();
+        return true;
+    }
+
+    /**
+     * Checks if a column exists in a given table.
+     * 
+     * @param string $table_name The name of the table to check.
+     * @param string $column_name The name of the column to check.
+     * @return bool True if the column exists, false otherwise.
+     */
+    private function column_exists( $table_name, $column_name ) {
+        // phpcs:disable WordPress.DB.PreparedSQL.NotPrepared -- INFORMATION_SCHEMA queries require literal DB_NAME constant and table names
+        $column_exists = $this->wpdb->get_results(
+            $this->wpdb->prepare(
+                "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS 
+                 WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s AND COLUMN_NAME = %s",
+                DB_NAME,
+                $table_name,
+                $column_name
+            )
+        );
+        // phpcs:enable WordPress.DB.PreparedSQL.NotPrepared
+
+        return ! empty( $column_exists );
     }
 
     /**
@@ -130,9 +206,10 @@ class EDHBB_Database {
      * The IP will be blocked for the defined block duration.
      *
      * @param string $ip_address The IP address to block.
+     * @param string $hostname The hostname of the blocked bot.
      * @return bool True on success, false on failure.
      */
-    public function add_blocked_bot( $ip_address ) {
+    public function add_blocked_bot( $ip_address, $hostname = '' ) {
         // Clean up old entries before adding a new one to keep the table lean.
         $this->clean_old_blocked_bots();
 
@@ -141,18 +218,35 @@ class EDHBB_Database {
         $expires_timestamp = strtotime( $current_time . ' + ' . $this->block_duration_days . ' days' );
         $expires_at = gmdate( 'Y-m-d H:i:s', $expires_timestamp );
 
+        // Check if hostname column exists to determine the query format
+        $hostname_exists = $this->column_exists( $this->blocked_bots_table_name, 'hostname' );
+
         // Insert the IP address into the blocked bots table.
         // Using `INSERT IGNORE` to prevent errors if the IP is already present due to the UNIQUE KEY constraint.
         // phpcs:disable WordPress.DB.PreparedSQL.NotPrepared -- %i placeholder is valid since WordPress 6.2
-        $result = $this->wpdb->query(
-            $this->wpdb->prepare(
-                "INSERT IGNORE INTO %i (ip_address, blocked_at, expires_at) VALUES (%s, %s, %s)",
-                $this->blocked_bots_table_name,
-                $ip_address,
-                $current_time,
-                $expires_at
-            )
-        );
+        if ( $hostname_exists ) {
+            $result = $this->wpdb->query(
+                $this->wpdb->prepare(
+                    "INSERT IGNORE INTO %i (ip_address, hostname, blocked_at, expires_at) VALUES (%s, %s, %s, %s)",
+                    $this->blocked_bots_table_name,
+                    $ip_address,
+                    $hostname,
+                    $current_time,
+                    $expires_at
+                )
+            );
+        } else {
+            // Fallback for tables without hostname column
+            $result = $this->wpdb->query(
+                $this->wpdb->prepare(
+                    "INSERT IGNORE INTO %i (ip_address, blocked_at, expires_at) VALUES (%s, %s, %s)",
+                    $this->blocked_bots_table_name,
+                    $ip_address,
+                    $current_time,
+                    $expires_at
+                )
+            );
+        }
         // phpcs:enable WordPress.DB.PreparedSQL.NotPrepared
 
         if ( $result ) {
@@ -193,8 +287,14 @@ class EDHBB_Database {
     public function get_blocked_bots( $limit = 0, $offset = 0 ) {
         $this->clean_old_blocked_bots(); // Ensure only current blocks are considered.
 
+        // Check if hostname column exists to avoid SQL errors
+        $hostname_exists = $this->column_exists( $this->blocked_bots_table_name, 'hostname' );
+        $select_fields = $hostname_exists ? 
+            "id, ip_address, hostname, blocked_at, expires_at" : 
+            "id, ip_address, '' as hostname, blocked_at, expires_at";
+
         // phpcs:disable WordPress.DB.PreparedSQL.NotPrepared -- %i placeholder is valid since WordPress 6.2
-        $sql = "SELECT id, ip_address, blocked_at, expires_at FROM %i WHERE expires_at > %s ORDER BY blocked_at DESC";
+        $sql = "SELECT {$select_fields} FROM %i WHERE expires_at > %s ORDER BY blocked_at DESC";
         $sql_params = array( $this->blocked_bots_table_name, current_time( 'mysql' ) );
 
         if ( $limit > 0 ) {
@@ -319,6 +419,59 @@ class EDHBB_Database {
         // phpcs:enable WordPress.DB.PreparedSQL.NotPrepared
 
         return ( $result > 0 );
+    }
+
+    /**
+     * Updates hostname for a specific blocked IP address.
+     *
+     * @param string $ip_address The IP address to update.
+     * @param string $hostname The hostname to set.
+     * @return bool True on success, false on failure.
+     */
+    public function update_blocked_bot_hostname( $ip_address, $hostname ) {
+        // Check if hostname column exists
+        if ( ! $this->column_exists( $this->blocked_bots_table_name, 'hostname' ) ) {
+            return false; // Cannot update if column doesn't exist
+        }
+
+        // phpcs:disable WordPress.DB.PreparedSQL.NotPrepared -- %i placeholder is valid since WordPress 6.2
+        $result = $this->wpdb->update(
+            $this->blocked_bots_table_name,
+            array( 'hostname' => $hostname ),
+            array( 'ip_address' => $ip_address ),
+            array( '%s' ),
+            array( '%s' )
+        );
+        // phpcs:enable WordPress.DB.PreparedSQL.NotPrepared
+
+        return $result !== false;
+    }
+
+    /**
+     * Gets blocked IPs that have empty or null hostnames for background processing.
+     *
+     * @param int $limit Maximum number of IPs to return.
+     * @return array Array of IP addresses that need hostname resolution.
+     */
+    public function get_blocked_ips_without_hostnames( $limit = 10 ) {
+        // Check if hostname column exists
+        if ( ! $this->column_exists( $this->blocked_bots_table_name, 'hostname' ) ) {
+            return array(); // Return empty array if column doesn't exist
+        }
+
+        // phpcs:disable WordPress.DB.PreparedSQL.NotPrepared -- %i placeholder is valid since WordPress 6.2
+        $results = $this->wpdb->get_results(
+            $this->wpdb->prepare(
+                "SELECT ip_address FROM %i WHERE (hostname IS NULL OR hostname = '' OR hostname = '[No PTR Record]') AND expires_at > %s LIMIT %d",
+                $this->blocked_bots_table_name,
+                current_time( 'mysql' ),
+                $limit
+            ),
+            ARRAY_A
+        );
+        // phpcs:enable WordPress.DB.PreparedSQL.NotPrepared
+
+        return wp_list_pluck( $results, 'ip_address' );
     }
 
     /**

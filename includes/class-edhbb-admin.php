@@ -5,6 +5,7 @@
  * Handles all administrative functionalities, including menu pages, form processing,
  * and displaying blocked bots and whitelisted IPs.
  */
+declare(strict_types=1);
 
 if ( ! defined( 'ABSPATH' ) ) exit; // Exit if accessed directly
 
@@ -34,6 +35,12 @@ class EDHBB_Admin {
 
         // Handle form submission for plugin options.
         add_action( 'admin_post_edhbb_save_options', array( $this, 'handle_save_options' ) );
+        
+        // Handle manual hostname update trigger.
+        add_action( 'admin_post_edhbb_update_hostnames', array( $this, 'handle_update_hostnames' ) );
+        
+        // Handle force refresh all hostnames trigger.
+        add_action( 'admin_post_edhbb_force_refresh_all_hostnames', array( $this, 'handle_force_refresh_all_hostnames' ) );
     }
 
     /**
@@ -316,5 +323,201 @@ class EDHBB_Admin {
         $redirect_url = admin_url( 'tools.php?page=' . $this->admin_page_slug . '&tab=options' );
         wp_redirect( esc_url_raw( $redirect_url ) );
         exit; // Important: Always exit after a redirect to prevent further script execution.
+    }
+
+    /**
+     * Handles the manual hostname update trigger from the admin interface.
+     */
+    public function handle_update_hostnames() {
+        // Verify nonce for security.
+        if ( ! isset( $_POST['_wpnonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ) ), 'edhbb_update_hostnames_nonce' ) ) {
+            wp_die( esc_html__( 'Security check failed.', 'edh-bad-bots' ) );
+        }
+
+        // Check user capabilities.
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_die( esc_html__( 'You do not have sufficient permissions to access this page.', 'edh-bad-bots' ) );
+        }
+
+        // Run the debug function if WP_DEBUG is enabled
+        if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+            $this->debug_hostname_resolution();
+        }
+
+        // Trigger the hostname update function
+        $updated_count = $this->manual_hostname_update();
+
+        // Add a success message to be displayed on the admin page.
+        add_settings_error(
+            'edhbb_messages',
+            'edhbb_hostnames_updated',
+            sprintf(
+                /* translators: %d: number of updated hostnames */
+                _n( 
+                    'Updated %d hostname.', 
+                    'Updated %d hostnames.', 
+                    $updated_count, 
+                    'edh-bad-bots' 
+                ),
+                $updated_count
+            ),
+            'success'
+        );
+
+        // Redirect back to the admin page, specifically the 'blocked' tab.
+        $redirect_url = admin_url( 'tools.php?page=' . $this->admin_page_slug . '&tab=blocked' );
+        wp_redirect( esc_url_raw( $redirect_url ) );
+        exit;
+    }
+
+    /**
+     * Manually updates hostnames for blocked IPs that don't have them.
+     * 
+     * @return int Number of hostnames updated.
+     */
+    private function manual_hostname_update() {
+        // Get IPs without hostnames (limit to 10 for manual processing)
+        $ips_without_hostnames = $this->db->get_blocked_ips_without_hostnames( 10 );
+        
+        if ( empty( $ips_without_hostnames ) ) {
+            return 0; // Nothing to do
+        }
+        
+        // Create a blocker instance to access the hostname resolution method
+        $blocker = new EDHBB_Blocker( $this->db );
+        
+        // Use reflection to access the private method
+        $reflection = new ReflectionClass( $blocker );
+        $hostname_method = $reflection->getMethod( 'get_hostname_for_ip' );
+        $hostname_method->setAccessible( true );
+        
+        $updated_count = 0;
+        
+        foreach ( $ips_without_hostnames as $ip_address ) {
+            // Use the DNS lookup if available, otherwise fall back to blocker method
+            if ( class_exists( 'EDHBB_DNSLookup' ) ) {
+                $hostname = EDHBB_DNSLookup::get_hostname_for_blocked_ip( $ip_address );
+            } else {
+                // Fallback to the original blocker method
+                $hostname = $hostname_method->invoke( $blocker, $ip_address );
+            }
+            
+            // Update the database with the resolved hostname (even if empty)
+            if ( $this->db->update_blocked_bot_hostname( $ip_address, $hostname ) ) {
+                $updated_count++;
+            }
+        }
+        
+        return $updated_count;
+    }
+
+    /**
+     * Debugs hostname resolution for a sample IP address.
+     */
+    public function debug_hostname_resolution() {
+        $debug_info = array();
+        $ip_to_test = '8.8.8.8'; // A reliable IP for testing
+
+        // Test gethostbyaddr()
+        $debug_info['gethostbyaddr']['exists'] = function_exists( 'gethostbyaddr' ) ? 'Yes' : 'No';
+        $debug_info['gethostbyaddr']['callable'] = is_callable( 'gethostbyaddr' ) ? 'Yes' : 'No';
+        if ( function_exists( 'gethostbyaddr' ) ) {
+            $debug_info['gethostbyaddr']['result'] = gethostbyaddr( $ip_to_test );
+        }
+
+        // Test dns_get_record()
+        $debug_info['dns_get_record']['exists'] = function_exists( 'dns_get_record' ) ? 'Yes' : 'No';
+        $debug_info['dns_get_record']['callable'] = is_callable( 'dns_get_record' ) ? 'Yes' : 'No';
+        if ( function_exists( 'dns_get_record' ) ) {
+            $debug_info['dns_get_record']['result'] = dns_get_record( $ip_to_test, DNS_PTR );
+        }
+
+        set_transient( 'edhbb_debug_info', $debug_info, 60 );
+    }
+
+    /**
+     * Handles the force refresh all hostnames action.
+     */
+    public function handle_force_refresh_all_hostnames() {
+        // Verify nonce for security.
+        if ( ! isset( $_POST['_wpnonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ) ), 'edhbb_force_refresh_all_hostnames_nonce' ) ) {
+            wp_die( esc_html__( 'Security check failed.', 'edh-bad-bots' ) );
+        }
+
+        // Check user capabilities.
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_die( esc_html__( 'You do not have sufficient permissions to access this page.', 'edh-bad-bots' ) );
+        }
+
+        // Clear all DNS caches
+        if ( class_exists( 'EDHBB_DNSLookup' ) ) {
+            // Clear hostname cache
+            global $wpdb;
+            // phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- Intentionally clearing transient cache for this plugin, caching not applicable for cache clearing operations
+            $wpdb->query( 
+                $wpdb->prepare( 
+                    "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s", 
+                    $wpdb->esc_like( '_transient_edhbb_hostname_' ) . '%' 
+                ) 
+            );
+            $wpdb->query( 
+                $wpdb->prepare( 
+                    "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s", 
+                    $wpdb->esc_like( '_transient_timeout_edhbb_hostname_' ) . '%' 
+                ) 
+            );
+            // phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+        }
+
+        // Get ALL blocked IPs (not just ones without hostnames)
+        $all_blocked_ips = $this->db->get_blocked_bots( 0 ); // 0 = no limit
+        $updated_count = 0;
+
+        foreach ( $all_blocked_ips as $bot ) {
+            $ip_address = $bot['ip_address'];
+            
+            // Force new hostname lookup
+            if ( class_exists( 'EDHBB_DNSLookup' ) ) {
+                $hostname = EDHBB_DNSLookup::get_hostname_for_blocked_ip( $ip_address );
+            } else {
+                // Fallback method
+                $blocker = new EDHBB_Blocker( $this->db );
+                $reflection = new ReflectionClass( $blocker );
+                $hostname_method = $reflection->getMethod( 'get_hostname_for_ip' );
+                $hostname_method->setAccessible( true );
+                $hostname = $hostname_method->invoke( $blocker, $ip_address );
+                // Ensure we set a clear indicator for empty results in fallback
+                if ( empty( $hostname ) ) {
+                    $hostname = '[No PTR Record]';
+                }
+            }
+            
+            // Update the database
+            if ( $this->db->update_blocked_bot_hostname( $ip_address, $hostname ) ) {
+                $updated_count++;
+            }
+        }
+
+        // Add success message
+        add_settings_error(
+            'edhbb_messages',
+            'edhbb_force_refresh_completed',
+            sprintf(
+                /* translators: %d: number of updated hostnames */
+                _n( 
+                    'Force refreshed %d hostname (cleared cache and re-resolved all).', 
+                    'Force refreshed %d hostnames (cleared cache and re-resolved all).', 
+                    $updated_count, 
+                    'edh-bad-bots' 
+                ),
+                $updated_count
+            ),
+            'success'
+        );
+
+        // Redirect back to the admin page
+        $redirect_url = admin_url( 'tools.php?page=' . $this->admin_page_slug . '&tab=blocked' );
+        wp_redirect( esc_url_raw( $redirect_url ) );
+        exit;
     }
 }

@@ -4,6 +4,7 @@
  *
  * Handles detecting and blocking bad bots that hit the trap URL.
  */
+declare(strict_types=1);
 
 if ( ! defined( 'ABSPATH' ) ) exit; // Exit if accessed directly
 
@@ -107,6 +108,9 @@ class EDHBB_Blocker {
         
         $current_url = esc_url_raw( wp_unslash( $_SERVER['REQUEST_URI'] ) );
         $site_path = wp_parse_url( site_url(), PHP_URL_PATH );
+        
+        // Handle cases where site_path might be null (when URL has no path component)
+        $site_path = $site_path ?? '';
         $expected_trap_path = rtrim( $site_path, '/' ) . '/' . $this->trap_url_hash . '/';
 
         // Check if the current URL matches our trap URL.
@@ -126,11 +130,77 @@ class EDHBB_Blocker {
             }
 
             // Add the bot to the blocked list.
-            $this->db->add_blocked_bot( $client_ip );
+            $hostname = $this->get_hostname_for_ip($client_ip);
+            $this->db->add_blocked_bot( $client_ip, $hostname );
 
             // Immediately block the request after adding to the blocklist.
             $this->block_request_action( $client_ip, true ); // Pass true to indicate it's a trap hit block
         }
+    }
+
+    /**
+     * Attempts to resolve hostname for an IP address using enhanced DNS lookup.
+     * Uses the new EDHBB_DNSLookup class with DoH support and fallback methods.
+     * 
+     * @param string $ip_address The IP address to resolve.
+     * @return string The hostname if resolved, empty string if failed.
+     */
+    private function get_hostname_for_ip( $ip_address ) {
+        // Validate IP address first
+        if ( ! filter_var( $ip_address, FILTER_VALIDATE_IP ) ) {
+            return '';
+        }
+
+        // Check if the DNSLookup class is available
+        if ( ! class_exists( 'EDHBB_DNSLookup' ) ) {
+            // Fallback to traditional method if class not loaded
+            return $this->traditional_hostname_lookup( $ip_address );
+        }
+
+        // Use the DNS lookup method for blocked IPs
+        return EDHBB_DNSLookup::get_hostname_for_blocked_ip( $ip_address );
+    }
+
+    /**
+     * Traditional hostname lookup method as fallback.
+     * 
+     * @param string $ip_address The IP address to resolve.
+     * @return string The hostname if resolved, empty string if failed.
+     */
+    private function traditional_hostname_lookup( $ip_address ) {
+        // Check if dns_get_record is disabled
+        if ( ! function_exists( 'dns_get_record' ) || ! is_callable( 'dns_get_record' ) ) {
+            if ( defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG ) {
+                // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+                error_log( '[EDH Bad Bots] Hostname lookup failed: dns_get_record() is disabled.' );
+            }
+            return '';
+        }
+
+        $hostname = '';
+        
+        try {
+            // Perform a reverse DNS lookup (PTR record)
+            $ptr_records = @dns_get_record( $ip_address, DNS_PTR );
+
+            if ( $ptr_records && ! empty( $ptr_records[0]['target'] ) ) {
+                $resolved = $ptr_records[0]['target'];
+                
+                // Validate the resolved hostname
+                if ( filter_var( $resolved, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME ) || 
+                     preg_match( '/^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$/', $resolved ) ) {
+                    $hostname = $resolved;
+                }
+            }
+        } catch ( Exception $e ) {
+            // Log the error if debug logging is enabled
+            if ( defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG ) {
+                // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Only logs when WP_DEBUG_LOG is enabled
+                error_log( '[EDH Bad Bots] Hostname lookup failed for IP ' . $ip_address . ': ' . $e->getMessage() );
+            }
+        }
+
+        return $hostname;
     }
 
     /**
