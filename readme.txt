@@ -3,7 +3,7 @@ Contributors: EncodeDotHost, nbwpuk
 Tags: Security, Bots, DNS, PTR, Hostname
 Requires at least: 6.2
 Tested up to: 6.8
-Stable tag: 1.5.0
+Stable tag: 1.6.0
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -198,6 +198,13 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 3. Activate the plugin and test your changes
 
 ## Changelog
+
+### Version 1.6.0
+- **New**: FCrDNS (Forward-Confirmed Reverse DNS) verification on trap hits — verified Googlebot, Bingbot, and other legitimate crawlers are protected from being accidentally blocked. Extensible via the `edhbb_trusted_crawler_domains` filter hook.
+- **Fix**: Plugin deactivation now correctly removes `.htaccess` block rules, matching the documented behaviour. Previously, blocks persisted at the server level after deactivation.
+- **Fix**: Cron scheduling moved into the activation hook — removed a redundant `wp_next_scheduled()` check that ran on every single page load.
+- **Fix**: Force-refresh hostname cache now uses `delete_transient()` per IP instead of a direct SQL `DELETE` query, ensuring compatibility with object caches (Redis, Memcached) used by managed WordPress hosts.
+- **Enhancement**: Blocked bots admin list is now paginated (50 per page) to prevent browser crashes and PHP out-of-memory errors on sites with large numbers of blocked IPs.
 
 ### Version 1.5.0
 - **Security**: Fixed IP spoofing vulnerability — `get_client_ip()` now uses only `REMOTE_ADDR`, ignoring spoofable `HTTP_CLIENT_IP` and `HTTP_X_FORWARDED_FOR` headers
