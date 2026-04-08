@@ -589,8 +589,9 @@ class EDHBB_Database {
             return;
         }
 
+        // No <Limit> wrapper — rules apply to all HTTP methods (GET, POST, OPTIONS, etc.)
+        // to prevent blocked bots bypassing the block with non-standard verbs.
         $rules = [
-            '<Limit GET POST HEAD>',
             'Order Allow,Deny',
             'Allow from All',
         ];
@@ -599,7 +600,6 @@ class EDHBB_Database {
             // IPv6 bots are also blocked at PHP level via is_bot_blocked().
             $rules[] = 'Deny from ' . $ip;
         }
-        $rules[] = '</Limit>';
 
         insert_with_markers( $this->htaccess_path, 'EDH Bad Bots Block', $rules );
     }

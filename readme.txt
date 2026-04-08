@@ -3,7 +3,7 @@ Contributors: EncodeDotHost, nbwpuk
 Tags: Security, Bots, DNS, PTR, Hostname
 Requires at least: 6.2
 Tested up to: 6.8
-Stable tag: 1.7.0
+Stable tag: 1.7.1
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -198,6 +198,12 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 3. Activate the plugin and test your changes
 
 ## Changelog
+
+### Version 1.7.1
+- **Fix**: Removed `<Limit GET POST HEAD>` wrapper from `.htaccess` block rules — bots using other HTTP methods (DELETE, PUT, PATCH, etc.) are now blocked at the server level too
+- **Enhancement**: Background cron hostname resolution batch size increased from 5 to 25 IPs per run, speeding up hostname population on sites with many blocked bots
+- **Performance**: `EDHBB_Admin` class is now only instantiated on admin requests (`is_admin()` guard), saving memory on every frontend page load
+- **Cleanup**: Plugin uninstall now removes all `_transient_edhbb_*` and `_transient_timeout_edhbb_*` entries from the options table for a fully clean uninstall
 
 ### Version 1.7.0
 - **Critical fix**: Database migrations now run on plugin updates, not just on activation. A version-based check on `plugins_loaded` ensures schema changes (e.g. the hostname column) are applied even after automatic updates.

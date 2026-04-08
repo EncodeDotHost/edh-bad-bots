@@ -3,7 +3,7 @@
  * Plugin Name: EDH Bad Bots
  * Plugin URI: https://github.com/EncodeDotHost/edh-bad-bots
  * Description: This plugin is used to block bots that don't honor the robots.txt file from the site.
- * Version: 1.7.0
+ * Version: 1.7.1
  * Requires at least: 6.2
  * Requires PHP: 7.4
  * Tested up to: 6.8
@@ -16,7 +16,7 @@
  * @package edh-bad-bots
  * @author EncodeDotHost
  * @contributor nbwpuk
- * @version 1.7.0
+ * @version 1.7.1
  * @link https://github.com/EncodeDotHost/edh-bad-bots
  * @license GPL v3 or later
  */
@@ -30,7 +30,7 @@ if(!defined('ABSPATH')) exit;
  */
 define( 'EDHBB_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'EDHBB_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
-define( 'EDHBB_VERSION', '1.7.0' );
+define( 'EDHBB_VERSION', '1.7.1' );
 
 /**
  * Include core plugin files.
@@ -87,7 +87,12 @@ function edhbb_deactivate_plugin() {
 function edhbb_init_plugin() {
     $edh_database = new EDHBB_Database();
     $edh_blocker = new EDHBB_Blocker( $edh_database ); // Pass database instance to blocker
-    $edh_admin = new EDHBB_Admin( $edh_database );     // Pass database instance to admin
+
+    // Only load the admin class when inside the dashboard or handling admin-post/ajax
+    // requests — saves memory on every regular frontend page load.
+    if ( is_admin() ) {
+        $edh_admin = new EDHBB_Admin( $edh_database );
+    }
 }
 add_action( 'plugins_loaded', 'edhbb_init_plugin' );
 
@@ -115,7 +120,7 @@ function edhbb_update_missing_hostnames() {
     $edh_database = new EDHBB_Database();
 
     // Get IPs without hostnames (limit to 5 per run to avoid timeouts)
-    $ips_without_hostnames = $edh_database->get_blocked_ips_without_hostnames( 5 );
+    $ips_without_hostnames = $edh_database->get_blocked_ips_without_hostnames( 25 );
 
     if ( empty( $ips_without_hostnames ) ) {
         return; // Nothing to do
