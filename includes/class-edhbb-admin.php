@@ -435,32 +435,17 @@ class EDHBB_Admin {
             wp_die( esc_html__( 'You do not have sufficient permissions to access this page.', 'edh-bad-bots' ) );
         }
 
-        // Clear all DNS caches
-        if ( class_exists( 'EDHBB_DNSLookup' ) ) {
-            // Clear hostname cache
-            global $wpdb;
-            // phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- Intentionally clearing transient cache for this plugin, caching not applicable for cache clearing operations
-            $wpdb->query( 
-                $wpdb->prepare( 
-                    "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s", 
-                    $wpdb->esc_like( '_transient_edhbb_hostname_' ) . '%' 
-                ) 
-            );
-            $wpdb->query( 
-                $wpdb->prepare( 
-                    "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s", 
-                    $wpdb->esc_like( '_transient_timeout_edhbb_hostname_' ) . '%' 
-                ) 
-            );
-            // phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-        }
-
         // Get blocked IPs capped at 50 to avoid PHP timeout/memory limits on large datasets.
         $all_blocked_ips = $this->db->get_blocked_bots( 50 );
         $updated_count = 0;
 
         foreach ( $all_blocked_ips as $bot ) {
             $ip_address = $bot['ip_address'];
+
+            // Delete the individual transient before re-resolving so object caches
+            // (Redis, Memcached) are properly invalidated — a direct SQL DELETE would
+            // miss entries stored in RAM rather than the options table.
+            delete_transient( 'edhbb_hostname_' . md5( $ip_address ) );
 
             $hostname = EDHBB_DNSLookup::get_hostname_for_blocked_ip( $ip_address );
 

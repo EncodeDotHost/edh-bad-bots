@@ -14,9 +14,17 @@ if ( ! isset( $db ) || ! ( $db instanceof EDHBB_Database ) ) {
     return; // Safety check
 }
 
-// Fetch data from the database using the provided $db instance.
-$blocked_bots = $db->get_blocked_bots();
+// Fetch whitelisted IPs (typically a small list, no pagination needed).
 $whitelisted_ips = $db->get_whitelisted_ips();
+
+// Pagination for blocked bots.
+$bots_per_page = 50;
+// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only page navigation
+$current_page   = isset( $_GET['paged'] ) ? max( 1, absint( $_GET['paged'] ) ) : 1;
+$bots_offset    = ( $current_page - 1 ) * $bots_per_page;
+$total_bots     = $db->count_blocked_bots();
+$total_pages    = $total_bots > 0 ? (int) ceil( $total_bots / $bots_per_page ) : 1;
+$blocked_bots   = $db->get_blocked_bots( $bots_per_page, $bots_offset );
 
 // Determine which tab is active (default to 'whitelist')
 // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Tab switching doesn't require nonce verification
@@ -170,7 +178,18 @@ $block_duration_days = get_option( 'edhbb_block_duration_days', 30 );
                 <?php endif;
                 } ?>
 
-                <?php if ( ! empty( $blocked_bots ) ) : ?>
+                <?php if ( $total_bots > 0 ) : ?>
+                    <p style="margin-bottom: 8px;">
+                        <?php
+                        echo esc_html( sprintf(
+                            /* translators: 1: first item number, 2: last item number, 3: total */
+                            __( 'Showing %1$d–%2$d of %3$d blocked bots.', 'edh-bad-bots' ),
+                            $bots_offset + 1,
+                            min( $bots_offset + $bots_per_page, $total_bots ),
+                            $total_bots
+                        ) );
+                        ?>
+                    </p>
                     <table class="wp-list-table widefat fixed striped">
                         <thead>
                             <tr>
@@ -186,8 +205,8 @@ $block_duration_days = get_option( 'edhbb_block_duration_days', 30 );
                                 <tr>
                                     <td><?php echo esc_html( $bot['ip_address'] ); ?></td>
                                     <td>
-                                        <?php 
-                                        $hostname = esc_html( $bot['hostname'] );
+                                        <?php
+                                        $hostname = $bot['hostname'];
                                         if ( $hostname === '[No PTR Record]' || empty( $hostname ) ) {
                                             echo '<em style="color: #666;">[No PTR Record]</em>';
                                         } else {
@@ -209,6 +228,23 @@ $block_duration_days = get_option( 'edhbb_block_duration_days', 30 );
                             <?php endforeach; ?>
                         </tbody>
                     </table>
+
+                    <?php if ( $total_pages > 1 ) : ?>
+                        <div class="tablenav bottom" style="margin-top: 10px;">
+                            <div class="tablenav-pages">
+                                <?php
+                                echo paginate_links( array( // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- paginate_links returns safe HTML
+                                    'base'      => add_query_arg( 'paged', '%#%' ),
+                                    'format'    => '',
+                                    'prev_text' => '&laquo;',
+                                    'next_text' => '&raquo;',
+                                    'total'     => $total_pages,
+                                    'current'   => $current_page,
+                                ) );
+                                ?>
+                            </div>
+                        </div>
+                    <?php endif; ?>
                 <?php else : ?>
                     <p><?php esc_html_e( 'No bots currently blocked.', 'edh-bad-bots' ); ?></p>
                 <?php endif; ?>

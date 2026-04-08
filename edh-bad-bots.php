@@ -50,41 +50,34 @@ register_activation_hook( __FILE__, 'edhbb_activate_plugin' );
 register_deactivation_hook( __FILE__, 'edhbb_deactivate_plugin' );
 
 /**
- * Schedule hostname update cron job on activation.
+ * Register the cron action handler.
  */
 add_action( 'edhbb_update_hostnames_cron', 'edhbb_update_missing_hostnames' );
 
 /**
- * Schedule the cron event if it's not already scheduled.
- */
-if ( ! wp_next_scheduled( 'edhbb_update_hostnames_cron' ) ) {
-    wp_schedule_event( time(), 'hourly', 'edhbb_update_hostnames_cron' );
-}
-
-/**
  * Activation callback function.
- * This is where database tables and initial options are set up.
+ * Creates database tables and schedules the hostname resolution cron job.
  */
 function edhbb_activate_plugin() {
-    // Instantiate the database class and create tables.
     $edh_database = new EDHBB_Database();
     $edh_database->create_tables();
 
-    // You might also set up initial options here if needed.
+    // Schedule the hourly hostname resolution cron job once on activation.
+    if ( ! wp_next_scheduled( 'edhbb_update_hostnames_cron' ) ) {
+        wp_schedule_event( time(), 'hourly', 'edhbb_update_hostnames_cron' );
+    }
 }
 
 /**
  * Deactivation callback function.
- * This is where plugin-specific data can be cleaned up.
+ * Clears the cron job and removes .htaccess rules to leave the site clean.
  */
 function edhbb_deactivate_plugin() {
-    // Clear the scheduled cron job
     wp_clear_scheduled_hook( 'edhbb_update_hostnames_cron' );
-    
-    // Optionally, you can drop tables here. Be cautious with this as users might want to reactivate.
-    // For now, we'll leave it empty to preserve data on deactivation.
-    // $edh_database = new EDHBB_Database();
-    // $edh_database->drop_tables();
+
+    // Remove .htaccess block rules on deactivation, as advertised in the readme.
+    $edh_database = new EDHBB_Database();
+    $edh_database->remove_htaccess_block_rules( true );
 }
 
 /**

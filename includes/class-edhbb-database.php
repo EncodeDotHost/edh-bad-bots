@@ -475,6 +475,26 @@ class EDHBB_Database {
     }
 
     /**
+     * Returns the total count of currently active (non-expired) blocked bots.
+     * Used for admin pagination.
+     *
+     * @return int Total number of active blocked bot records.
+     */
+    public function count_blocked_bots() {
+        // phpcs:disable WordPress.DB.PreparedSQL.NotPrepared -- %i placeholder is valid since WordPress 6.2
+        $count = $this->wpdb->get_var(
+            $this->wpdb->prepare(
+                "SELECT COUNT(id) FROM %i WHERE expires_at > %s",
+                $this->blocked_bots_table_name,
+                current_time( 'mysql' )
+            )
+        );
+        // phpcs:enable WordPress.DB.PreparedSQL.NotPrepared
+
+        return (int) $count;
+    }
+
+    /**
      * Gets blocked IPs that have empty or null hostnames for background processing.
      *
      * @param int $limit Maximum number of IPs to return.
@@ -620,7 +640,7 @@ class EDHBB_Database {
      * @param bool $force_remove Whether to force removal even if option is disabled.
      * Useful for plugin deactivation to ensure a clean uninstall.
      */
-    private function remove_htaccess_block_rules( $force_remove = false ) {
+    public function remove_htaccess_block_rules( $force_remove = false ) {
         $this->init_filesystem();
 
         // Get the current option status.

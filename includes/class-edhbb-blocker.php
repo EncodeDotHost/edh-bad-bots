@@ -119,10 +119,62 @@ class EDHBB_Blocker {
                 return;
             }
 
+            // FCrDNS verification: do not block verified legitimate crawlers (Googlebot, Bingbot, etc.)
+            if ( $this->is_verified_legitimate_crawler( $client_ip ) ) {
+                return;
+            }
+
             // Block immediately with empty hostname; the cron job resolves it in the background.
             $this->db->add_blocked_bot( $client_ip, '' );
             $this->block_request_action( $client_ip, true ); // Pass true to indicate it's a trap hit block
         }
+    }
+
+    /**
+     * Verifies whether an IP belongs to a legitimate crawler using Forward-Confirmed Reverse DNS (FCrDNS).
+     *
+     * This is the method recommended by Google to verify Googlebot:
+     * 1. Reverse DNS the IP to get a hostname.
+     * 2. Check the hostname ends with a known trusted crawler domain.
+     * 3. Forward DNS the hostname back to an IP and confirm it matches the original.
+     *
+     * A filter hook `edhbb_trusted_crawler_domains` allows adding/removing trusted domains.
+     *
+     * @param string $ip The IP address to verify.
+     * @return bool True if the IP is a verified legitimate crawler, false otherwise.
+     */
+    private function is_verified_legitimate_crawler( string $ip ): bool {
+        // Step 1: Reverse DNS lookup
+        $hostname = @gethostbyaddr( $ip );
+        if ( ! $hostname || $hostname === $ip ) {
+            return false; // No PTR record — cannot verify
+        }
+
+        // Step 2: Check the hostname against known trusted crawler domains
+        $trusted_suffixes = apply_filters( 'edhbb_trusted_crawler_domains', [
+            '.googlebot.com',
+            '.google.com',
+            '.search.msn.com',
+            '.crawl.yahoo.net',
+            '.crawl.baidu.jp',
+            '.crawl.baidu.com',
+        ] );
+
+        $is_trusted_suffix = false;
+        foreach ( $trusted_suffixes as $suffix ) {
+            if ( substr( $hostname, -strlen( $suffix ) ) === $suffix ) {
+                $is_trusted_suffix = true;
+                break;
+            }
+        }
+
+        if ( ! $is_trusted_suffix ) {
+            return false; // Hostname does not match any known crawler domain
+        }
+
+        // Step 3: Forward DNS — resolve hostname back to an IP and confirm it matches
+        $resolved_ip = @gethostbyname( $hostname );
+        return $resolved_ip === $ip;
     }
 
     /**
