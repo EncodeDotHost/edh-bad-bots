@@ -220,6 +220,7 @@ $block_duration_days = get_option( 'edhbb_block_duration_days', 30 );
                                         <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" onsubmit="return confirm('<?php esc_attr_e( 'Are you sure you want to unblock this IP?', 'edh-bad-bots' ); ?>');">
                                             <input type="hidden" name="action" value="edhbb_remove_blocked_bot">
                                             <input type="hidden" name="edhbb_blocked_bot_ip" value="<?php echo esc_attr( $bot['ip_address'] ); ?>">
+                                            <input type="hidden" name="paged" value="<?php echo esc_attr( $current_page ); ?>">
                                             <?php wp_nonce_field( 'edhbb_remove_blocked_bot_nonce' ); ?>
                                             <?php submit_button( __( 'Unblock', 'edh-bad-bots' ), 'secondary', 'submit_unblock_bot', false ); ?>
                                         </form>

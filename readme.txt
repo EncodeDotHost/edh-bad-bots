@@ -3,7 +3,7 @@ Contributors: EncodeDotHost, nbwpuk
 Tags: Security, Bots, DNS, PTR, Hostname
 Requires at least: 6.2
 Tested up to: 6.8
-Stable tag: 1.6.0
+Stable tag: 1.7.0
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -198,6 +198,13 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 3. Activate the plugin and test your changes
 
 ## Changelog
+
+### Version 1.7.0
+- **Critical fix**: Database migrations now run on plugin updates, not just on activation. A version-based check on `plugins_loaded` ensures schema changes (e.g. the hostname column) are applied even after automatic updates.
+- **Critical fix**: Removed synchronous `gethostbyaddr()`/`gethostbyname()` DNS calls from the frontend trap-hit path. These blocking OS calls could hang PHP workers under a botnet DoS. FCrDNS verification now runs exclusively in the background cron — verified legitimate crawlers are automatically unblocked and whitelisted by the cron job.
+- **Fix**: Replaced manual `preg_replace()`/`put_contents()` `.htaccess` rewrite with WordPress's native `insert_with_markers()`, which uses `LOCK_EX` file locking to prevent `.htaccess` corruption under concurrent requests.
+- **Fix**: Added `uninstall.php` — custom database tables, plugin options, and column-exists cache entries are now fully removed when the plugin is deleted via WP Admin.
+- **Fix**: Unblocking an IP from a paginated admin list now returns the user to the same page instead of resetting to page 1.
 
 ### Version 1.6.0
 - **New**: FCrDNS (Forward-Confirmed Reverse DNS) verification on trap hits — verified Googlebot, Bingbot, and other legitimate crawlers are protected from being accidentally blocked. Extensible via the `edhbb_trusted_crawler_domains` filter hook.

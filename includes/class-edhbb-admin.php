@@ -273,8 +273,9 @@ class EDHBB_Admin {
             );
         }
 
-        // Redirect back to the admin page, maintaining the current tab.
-        $redirect_url = admin_url( 'tools.php?page=' . $this->admin_page_slug . '&tab=blocked' );
+        // Redirect back to the admin page, preserving the current page number.
+        $paged = isset( $_POST['paged'] ) ? absint( $_POST['paged'] ) : 1;
+        $redirect_url = admin_url( 'tools.php?page=' . $this->admin_page_slug . '&tab=blocked&paged=' . $paged );
         wp_redirect( esc_url_raw( $redirect_url ) );
         exit;
     }

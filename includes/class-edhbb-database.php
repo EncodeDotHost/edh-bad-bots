@@ -553,84 +553,55 @@ class EDHBB_Database {
      * or the .htaccess blocking option is toggled.
      */
     public function update_htaccess_block_rules() {
-        $this->init_filesystem();
-
-        // Retrieve the current setting for .htaccess blocking. Defaults to 'no' if not set.
         $enable_htaccess_blocking = get_option( 'edhbb_enable_htaccess_blocking', 'no' ) === 'yes';
 
-        // Check if WP_Filesystem is available.
-        if ( null === $this->wp_filesystem ) {
-            if ( $enable_htaccess_blocking && defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG ) {
-                // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Only logs when WP_DEBUG_LOG is enabled
-                error_log( '[EDH Bad Bots] WP_Filesystem not available for .htaccess operations.' );
-            }
-            return;
-        }
-
-        // Perform basic checks for .htaccess file existence and writability.
-        if ( ! $this->wp_filesystem->exists( $this->htaccess_path ) || ! $this->wp_filesystem->is_writable( $this->htaccess_path ) ) {
-            // Log an error if .htaccess is expected but not found/writable.
+        if ( ! file_exists( $this->htaccess_path ) || ! is_writable( $this->htaccess_path ) ) {
             if ( $enable_htaccess_blocking && defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG ) {
                 // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Only logs when WP_DEBUG_LOG is enabled
                 error_log( '[EDH Bad Bots] .htaccess file not found or not writable at: ' . $this->htaccess_path );
             }
-            return; // Cannot proceed if file is inaccessible.
+            return;
         }
 
-        // Get the current content of the .htaccess file.
-        $htaccess_content = $this->wp_filesystem->get_contents( $this->htaccess_path );
+        // insert_with_markers() handles file locking (LOCK_EX) safely, preventing the
+        // race condition that can corrupt .htaccess when concurrent requests write to it.
+        require_once ABSPATH . 'wp-admin/includes/misc.php';
 
-        // Define our unique markers for the plugin's block.
-        $start_marker = '# BEGIN EDH Bad Bots Block';
-        $end_marker = '# END EDH Bad Bots Block';
-
-        // Always remove any existing block first. This ensures we start clean before potentially adding new rules
-        // or leaving the block empty if the option is disabled.
-        if ( strpos( $htaccess_content, $start_marker ) !== false ) {
-            $htaccess_content = preg_replace(
-                '/' . preg_quote( $start_marker, '/' ) . '.*?' . preg_quote( $end_marker, '/' ) . '\s*/s',
-                '',
-                $htaccess_content
-            );
+        if ( ! $enable_htaccess_blocking ) {
+            // Blocking disabled — clear any existing plugin rules.
+            insert_with_markers( $this->htaccess_path, 'EDH Bad Bots Block', [] );
+            return;
         }
 
-        // Only generate and insert new rules if the 'enable_htaccess_blocking' option is active.
-        if ( $enable_htaccess_blocking ) {
-            // Retrieve all currently blocked IPs from the database.
-            // Importantly, we filter out any IPs that are also in the whitelist,
-            // as whitelisted IPs should never be blocked by .htaccess rules.
-            $blocked_ips_raw = $this->get_blocked_bots();
-            $whitelisted_ips_data = $this->get_whitelisted_ips();
-            $whitelisted_ips = array_column( $whitelisted_ips_data, 'ip_address' );
-            $blocked_ips_for_htaccess = [];
-            foreach ( $blocked_ips_raw as $bot ) {
-                if ( ! in_array( $bot['ip_address'], $whitelisted_ips, true ) ) {
-                    $blocked_ips_for_htaccess[] = $bot['ip_address'];
-                }
-            }
-
-            $new_rules = '';
-            // If there are IPs to block, generate the .htaccess rules.
-            if ( ! empty( $blocked_ips_for_htaccess ) ) {
-                $new_rules .= "{$start_marker}\n"; // Add our start marker
-                $new_rules .= "<Limit GET POST HEAD>\n"; // Apply rules to specific HTTP methods
-                $new_rules .= "Order Allow,Deny\n"; // Define the order of processing
-                $new_rules .= "Allow from All\n"; // Allow all by default...
-                foreach ( $blocked_ips_for_htaccess as $ip ) {
-                    // Note: 'Deny from' may not reliably block IPv6 on all Apache configs.
-                    // IPv6 bots are also blocked at PHP level via is_bot_blocked().
-                    $new_rules .= "Deny from " . $ip . "\n"; // ...then deny specific IPs
-                }
-                $new_rules .= "</Limit>\n";
-                $new_rules .= "{$end_marker}\n\n"; // Add our end marker and an extra newline
-
-                // Insert the new rules at the very beginning of the .htaccess file.
-                $htaccess_content = $new_rules . $htaccess_content;
+        // Build the filtered list of IPs to block, excluding whitelisted addresses.
+        $blocked_ips_raw = $this->get_blocked_bots();
+        $whitelisted_ips = array_column( $this->get_whitelisted_ips(), 'ip_address' );
+        $blocked_ips_for_htaccess = [];
+        foreach ( $blocked_ips_raw as $bot ) {
+            if ( ! in_array( $bot['ip_address'], $whitelisted_ips, true ) ) {
+                $blocked_ips_for_htaccess[] = $bot['ip_address'];
             }
         }
 
-        // Write the (potentially modified) content back to the .htaccess file.
-        $this->wp_filesystem->put_contents( $this->htaccess_path, $htaccess_content, FS_CHMOD_FILE );
+        if ( empty( $blocked_ips_for_htaccess ) ) {
+            // No IPs to block — remove any existing rules.
+            insert_with_markers( $this->htaccess_path, 'EDH Bad Bots Block', [] );
+            return;
+        }
+
+        $rules = [
+            '<Limit GET POST HEAD>',
+            'Order Allow,Deny',
+            'Allow from All',
+        ];
+        foreach ( $blocked_ips_for_htaccess as $ip ) {
+            // Note: 'Deny from' may not reliably block IPv6 on all Apache configs.
+            // IPv6 bots are also blocked at PHP level via is_bot_blocked().
+            $rules[] = 'Deny from ' . $ip;
+        }
+        $rules[] = '</Limit>';
+
+        insert_with_markers( $this->htaccess_path, 'EDH Bad Bots Block', $rules );
     }
 
     /**
@@ -641,40 +612,17 @@ class EDHBB_Database {
      * Useful for plugin deactivation to ensure a clean uninstall.
      */
     public function remove_htaccess_block_rules( $force_remove = false ) {
-        $this->init_filesystem();
-
-        // Get the current option status.
         $enable_htaccess_blocking = get_option( 'edhbb_enable_htaccess_blocking', 'no' ) === 'yes';
 
-        // Only remove rules if .htaccess blocking is currently enabled,
-        // or if explicitly told to force removal (e.g., during plugin deactivation).
         if ( ! $enable_htaccess_blocking && ! $force_remove ) {
             return; // Do nothing if option is off and not forced.
         }
 
-        // Check if WP_Filesystem is available.
-        if ( null === $this->wp_filesystem ) {
+        if ( ! file_exists( $this->htaccess_path ) || ! is_writable( $this->htaccess_path ) ) {
             return;
         }
 
-        // Check file accessibility.
-        if ( ! $this->wp_filesystem->exists( $this->htaccess_path ) || ! $this->wp_filesystem->is_writable( $this->htaccess_path ) ) {
-            return; // Cannot remove if file is inaccessible.
-        }
-
-        $htaccess_content = $this->wp_filesystem->get_contents( $this->htaccess_path );
-
-        $start_marker = '# BEGIN EDH Bad Bots Block';
-        $end_marker = '# END EDH Bad Bots Block';
-
-        // Remove the entire block if it exists within the file.
-        if ( strpos( $htaccess_content, $start_marker ) !== false ) {
-            $htaccess_content = preg_replace(
-                '/' . preg_quote( $start_marker, '/' ) . '.*?' . preg_quote( $end_marker, '/' ) . '\s*/s',
-                '',
-                $htaccess_content
-            );
-            $this->wp_filesystem->put_contents( $this->htaccess_path, $htaccess_content, FS_CHMOD_FILE ); // Write back the cleaned content.
-        }
+        require_once ABSPATH . 'wp-admin/includes/misc.php';
+        insert_with_markers( $this->htaccess_path, 'EDH Bad Bots Block', [] );
     }
 }

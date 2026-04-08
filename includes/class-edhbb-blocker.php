@@ -119,12 +119,9 @@ class EDHBB_Blocker {
                 return;
             }
 
-            // FCrDNS verification: do not block verified legitimate crawlers (Googlebot, Bingbot, etc.)
-            if ( $this->is_verified_legitimate_crawler( $client_ip ) ) {
-                return;
-            }
-
             // Block immediately with empty hostname; the cron job resolves it in the background.
+            // FCrDNS verification runs in the background cron — if the resolved hostname turns
+            // out to belong to a legitimate crawler, the cron auto-removes and whitelists it.
             $this->db->add_blocked_bot( $client_ip, '' );
             $this->block_request_action( $client_ip, true ); // Pass true to indicate it's a trap hit block
         }
@@ -133,19 +130,27 @@ class EDHBB_Blocker {
     /**
      * Verifies whether an IP belongs to a legitimate crawler using Forward-Confirmed Reverse DNS (FCrDNS).
      *
-     * This is the method recommended by Google to verify Googlebot:
-     * 1. Reverse DNS the IP to get a hostname.
+     * This is the method recommended by Google to verify Googlebot. It is intentionally
+     * called only from the background cron job — never on a live frontend request — to
+     * avoid synchronous DNS blocking calls under load.
+     *
+     * Steps:
+     * 1. Reverse DNS the IP to get a hostname (skipped if $hostname is already provided).
      * 2. Check the hostname ends with a known trusted crawler domain.
      * 3. Forward DNS the hostname back to an IP and confirm it matches the original.
      *
      * A filter hook `edhbb_trusted_crawler_domains` allows adding/removing trusted domains.
      *
-     * @param string $ip The IP address to verify.
+     * @param string $ip       The IP address to verify.
+     * @param string $hostname Optional pre-resolved hostname (e.g. from a DoH lookup) to
+     *                         skip the synchronous gethostbyaddr() reverse-DNS step.
      * @return bool True if the IP is a verified legitimate crawler, false otherwise.
      */
-    private function is_verified_legitimate_crawler( string $ip ): bool {
-        // Step 1: Reverse DNS lookup
-        $hostname = @gethostbyaddr( $ip );
+    public static function is_verified_legitimate_crawler( string $ip, string $hostname = '' ): bool {
+        // Step 1: Reverse DNS lookup (skipped when a hostname is already available)
+        if ( empty( $hostname ) || $hostname === '[No PTR Record]' ) {
+            $hostname = @gethostbyaddr( $ip );
+        }
         if ( ! $hostname || $hostname === $ip ) {
             return false; // No PTR record — cannot verify
         }

@@ -3,7 +3,7 @@
  * Plugin Name: EDH Bad Bots
  * Plugin URI: https://github.com/EncodeDotHost/edh-bad-bots
  * Description: This plugin is used to block bots that don't honor the robots.txt file from the site.
- * Version: 1.6.0
+ * Version: 1.7.0
  * Requires at least: 6.2
  * Requires PHP: 7.4
  * Tested up to: 6.8
@@ -16,7 +16,7 @@
  * @package edh-bad-bots
  * @author EncodeDotHost
  * @contributor nbwpuk
- * @version 1.6.0
+ * @version 1.7.0
  * @link https://github.com/EncodeDotHost/edh-bad-bots
  * @license GPL v3 or later
  */
@@ -30,7 +30,7 @@ if(!defined('ABSPATH')) exit;
  */
 define( 'EDHBB_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'EDHBB_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
-define( 'EDHBB_VERSION', '1.6.0' );
+define( 'EDHBB_VERSION', '1.7.0' );
 
 /**
  * Include core plugin files.
@@ -88,10 +88,24 @@ function edhbb_init_plugin() {
     $edh_database = new EDHBB_Database();
     $edh_blocker = new EDHBB_Blocker( $edh_database ); // Pass database instance to blocker
     $edh_admin = new EDHBB_Admin( $edh_database );     // Pass database instance to admin
-
-    // Any other initializations can go here.
 }
 add_action( 'plugins_loaded', 'edhbb_init_plugin' );
+
+/**
+ * Run database migrations on every page load after a plugin update.
+ * The activation hook does not fire on automatic updates, so this version-based
+ * check ensures migrations (e.g. new columns) are applied regardless of how the
+ * plugin was updated.
+ */
+function edhbb_check_db_version() {
+    $current_db_version = get_option( 'edhbb_db_version', '1.0.0' );
+    if ( version_compare( $current_db_version, EDHBB_VERSION, '<' ) ) {
+        $edh_database = new EDHBB_Database();
+        $edh_database->create_tables(); // Runs dbDelta and migration logic
+        update_option( 'edhbb_db_version', EDHBB_VERSION );
+    }
+}
+add_action( 'plugins_loaded', 'edhbb_check_db_version' );
 
 /**
  * Background cron function to update missing hostnames.
@@ -110,16 +124,29 @@ function edhbb_update_missing_hostnames() {
     foreach ( $ips_without_hostnames as $ip_address ) {
         $hostname = EDHBB_DNSLookup::get_hostname_for_blocked_ip( $ip_address );
 
-        // Update the database with the resolved hostname (even if empty)
+        // FCrDNS verification in the background: if the resolved hostname belongs to a
+        // verified legitimate crawler, automatically remove it from the blocklist and
+        // whitelist it so it is never blocked again. This avoids synchronous DNS on
+        // frontend trap hits while still protecting legitimate crawlers.
+        if ( EDHBB_Blocker::is_verified_legitimate_crawler( $ip_address, $hostname ) ) {
+            $edh_database->remove_blocked_bot( $ip_address );
+            $edh_database->add_whitelisted_ip( $ip_address );
+            if ( defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG ) {
+                // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Only logs when WP_DEBUG_LOG is enabled
+                error_log( '[EDH Bad Bots] Auto-whitelisted verified crawler: ' . $ip_address . ' (' . $hostname . ')' );
+            }
+            usleep( 100000 ); // 100ms delay
+            continue;
+        }
+
+        // Update the database with the resolved hostname
         $edh_database->update_blocked_bot_hostname( $ip_address, $hostname );
 
-        // Log successful resolution if debug logging is enabled
         if ( ! empty( $hostname ) && defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG ) {
             // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Only logs when WP_DEBUG_LOG is enabled
             error_log( '[EDH Bad Bots] Background hostname resolution: ' . $ip_address . ' -> ' . $hostname );
         }
 
-        // Small delay to prevent overwhelming DNS servers
         usleep( 100000 ); // 100ms delay
     }
 }
