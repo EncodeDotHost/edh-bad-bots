@@ -106,33 +106,26 @@ add_action( 'plugins_loaded', 'edhbb_init_plugin' );
  */
 function edhbb_update_missing_hostnames() {
     $edh_database = new EDHBB_Database();
-    $edh_blocker = new EDHBB_Blocker( $edh_database );
-    
+
     // Get IPs without hostnames (limit to 5 per run to avoid timeouts)
     $ips_without_hostnames = $edh_database->get_blocked_ips_without_hostnames( 5 );
-    
+
     if ( empty( $ips_without_hostnames ) ) {
         return; // Nothing to do
     }
-    
-    // Use reflection to access the private method (since we need the improved hostname resolution)
-    $reflection = new ReflectionClass( $edh_blocker );
-    $hostname_method = $reflection->getMethod( 'get_hostname_for_ip' );
-    $hostname_method->setAccessible( true );
-    
+
     foreach ( $ips_without_hostnames as $ip_address ) {
-        // Get hostname using the improved method
-        $hostname = $hostname_method->invoke( $edh_blocker, $ip_address );
-        
+        $hostname = EDHBB_DNSLookup::get_hostname_for_blocked_ip( $ip_address );
+
         // Update the database with the resolved hostname (even if empty)
         $edh_database->update_blocked_bot_hostname( $ip_address, $hostname );
-        
+
         // Log successful resolution if debug logging is enabled
         if ( ! empty( $hostname ) && defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG ) {
             // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Only logs when WP_DEBUG_LOG is enabled
             error_log( '[EDH Bad Bots] Background hostname resolution: ' . $ip_address . ' -> ' . $hostname );
         }
-        
+
         // Small delay to prevent overwhelming DNS servers
         usleep( 100000 ); // 100ms delay
     }
@@ -191,7 +184,7 @@ add_action( 'wp_footer', function() {
         // Output a visually hidden link with nofollow to act as a bot trap.
         // The link is styled to be invisible to human users but still present in the DOM for bots.
         echo '<div style="position: absolute; left: -9999px; overflow: hidden; height: 1px;">';
-        echo '<a href="' . esc_url( $trap_url ) . '" rel="nofollow" tabindex="-1">Sssshhh, secret bot trap!</a>';
+        echo '<a href="' . esc_url( $trap_url ) . '" rel="nofollow" tabindex="-1" aria-hidden="true">Sssshhh, secret bot trap!</a>';
         echo '</div>';
     }
 });

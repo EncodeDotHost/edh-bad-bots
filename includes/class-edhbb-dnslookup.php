@@ -50,12 +50,6 @@ class EDHBB_DNSLookup {
 
         $hostname = '';
 
-        // Debug logging if enabled
-        if ( defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG ) {
-            // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Only logs when WP_DEBUG_LOG is enabled
-            error_log( "[EDH Bad Bots] Starting hostname lookup for IP: {$ip_address}" );
-        }
-
         // Try DoH providers first
         foreach ( self::$doh_providers as $provider_name => $provider_url ) {
             $hostname = self::doh_ptr_lookup( $ip_address, $provider_name );
@@ -82,12 +76,6 @@ class EDHBB_DNSLookup {
             $hostname = '[No PTR Record]';
         }
 
-        // Final debug log
-        if ( defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG ) {
-            // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Only logs when WP_DEBUG_LOG is enabled
-            error_log( "[EDH Bad Bots] Final hostname result for {$ip_address}: {$hostname}" );
-        }
-
         // Cache the result
         set_transient( $cache_key, $hostname, self::$cache_duration );
 
@@ -110,11 +98,6 @@ class EDHBB_DNSLookup {
                 error_log( "[EDH Bad Bots] Failed to convert IP to reverse DNS format: {$ip_address}" );
             }
             return false;
-        }
-
-        if ( defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG ) {
-            // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Only logs when WP_DEBUG_LOG is enabled
-            error_log( "[EDH Bad Bots] Reverse DNS format for {$ip_address}: {$reverse_ip}" );
         }
 
         // Build query URL

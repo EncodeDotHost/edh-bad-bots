@@ -378,36 +378,22 @@ class EDHBB_Admin {
     private function manual_hostname_update() {
         // Get IPs without hostnames (limit to 10 for manual processing)
         $ips_without_hostnames = $this->db->get_blocked_ips_without_hostnames( 10 );
-        
+
         if ( empty( $ips_without_hostnames ) ) {
             return 0; // Nothing to do
         }
-        
-        // Create a blocker instance to access the hostname resolution method
-        $blocker = new EDHBB_Blocker( $this->db );
-        
-        // Use reflection to access the private method
-        $reflection = new ReflectionClass( $blocker );
-        $hostname_method = $reflection->getMethod( 'get_hostname_for_ip' );
-        $hostname_method->setAccessible( true );
-        
+
         $updated_count = 0;
-        
+
         foreach ( $ips_without_hostnames as $ip_address ) {
-            // Use the DNS lookup if available, otherwise fall back to blocker method
-            if ( class_exists( 'EDHBB_DNSLookup' ) ) {
-                $hostname = EDHBB_DNSLookup::get_hostname_for_blocked_ip( $ip_address );
-            } else {
-                // Fallback to the original blocker method
-                $hostname = $hostname_method->invoke( $blocker, $ip_address );
-            }
-            
+            $hostname = EDHBB_DNSLookup::get_hostname_for_blocked_ip( $ip_address );
+
             // Update the database with the resolved hostname (even if empty)
             if ( $this->db->update_blocked_bot_hostname( $ip_address, $hostname ) ) {
                 $updated_count++;
             }
         }
-        
+
         return $updated_count;
     }
 
@@ -469,29 +455,15 @@ class EDHBB_Admin {
             // phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
         }
 
-        // Get ALL blocked IPs (not just ones without hostnames)
-        $all_blocked_ips = $this->db->get_blocked_bots( 0 ); // 0 = no limit
+        // Get blocked IPs capped at 50 to avoid PHP timeout/memory limits on large datasets.
+        $all_blocked_ips = $this->db->get_blocked_bots( 50 );
         $updated_count = 0;
 
         foreach ( $all_blocked_ips as $bot ) {
             $ip_address = $bot['ip_address'];
-            
-            // Force new hostname lookup
-            if ( class_exists( 'EDHBB_DNSLookup' ) ) {
-                $hostname = EDHBB_DNSLookup::get_hostname_for_blocked_ip( $ip_address );
-            } else {
-                // Fallback method
-                $blocker = new EDHBB_Blocker( $this->db );
-                $reflection = new ReflectionClass( $blocker );
-                $hostname_method = $reflection->getMethod( 'get_hostname_for_ip' );
-                $hostname_method->setAccessible( true );
-                $hostname = $hostname_method->invoke( $blocker, $ip_address );
-                // Ensure we set a clear indicator for empty results in fallback
-                if ( empty( $hostname ) ) {
-                    $hostname = '[No PTR Record]';
-                }
-            }
-            
+
+            $hostname = EDHBB_DNSLookup::get_hostname_for_blocked_ip( $ip_address );
+
             // Update the database
             if ( $this->db->update_blocked_bot_hostname( $ip_address, $hostname ) ) {
                 $updated_count++;

@@ -28,7 +28,6 @@ class EDHBB_Database {
         $this->whitelisted_ips_table_name = $this->wpdb->prefix . 'edhbb_whitelisted_ips';
         $this->block_duration_days = get_option( 'edhbb_block_duration_days', 30 );
         $this->htaccess_path = ABSPATH . '.htaccess'; // Path to root .htaccess
-        $this->init_filesystem();
     }
 
     /**
@@ -172,10 +171,16 @@ class EDHBB_Database {
      * @return bool True if the column exists, false otherwise.
      */
     private function column_exists( $table_name, $column_name ) {
+        $cache_key = 'edhbb_col_' . md5( $table_name . $column_name );
+        $cached = get_option( $cache_key );
+        if ( $cached !== false ) {
+            return ( '1' === $cached );
+        }
+
         // phpcs:disable WordPress.DB.PreparedSQL.NotPrepared -- INFORMATION_SCHEMA queries require literal DB_NAME constant and table names
         $column_exists = $this->wpdb->get_results(
             $this->wpdb->prepare(
-                "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS 
+                "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
                  WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s AND COLUMN_NAME = %s",
                 DB_NAME,
                 $table_name,
@@ -184,7 +189,9 @@ class EDHBB_Database {
         );
         // phpcs:enable WordPress.DB.PreparedSQL.NotPrepared
 
-        return ! empty( $column_exists );
+        $exists = ! empty( $column_exists );
+        update_option( $cache_key, $exists ? '1' : '0', false );
+        return $exists;
     }
 
     /**
@@ -250,6 +257,7 @@ class EDHBB_Database {
         // phpcs:enable WordPress.DB.PreparedSQL.NotPrepared
 
         if ( $result ) {
+            delete_transient( 'edhbb_bl_' . md5( $ip_address ) );
             $this->update_htaccess_block_rules(); // Update .htaccess when a new bot is blocked, respecting the option.
         }
 
@@ -270,6 +278,7 @@ class EDHBB_Database {
         );
 
         if ( $result ) {
+            delete_transient( 'edhbb_bl_' . md5( $ip_address ) );
             $this->update_htaccess_block_rules(); // Update .htaccess when a bot is unblocked, respecting the option.
         }
 
@@ -323,6 +332,12 @@ class EDHBB_Database {
      * @return bool True if the IP is blocked and not expired, false otherwise.
      */
     public function is_bot_blocked( $ip_address ) {
+        $cache_key = 'edhbb_bl_' . md5( $ip_address );
+        $cached = get_transient( $cache_key );
+        if ( false !== $cached ) {
+            return ( '1' === $cached );
+        }
+
         $this->clean_old_blocked_bots(); // Clean up before checking to ensure accuracy.
 
         // phpcs:disable WordPress.DB.PreparedSQL.NotPrepared -- %i placeholder is valid since WordPress 6.2
@@ -336,7 +351,9 @@ class EDHBB_Database {
         );
         // phpcs:enable WordPress.DB.PreparedSQL.NotPrepared
 
-        return ( $result > 0 );
+        $is_blocked = ( $result > 0 );
+        set_transient( $cache_key, $is_blocked ? '1' : '0', 5 * MINUTE_IN_SECONDS );
+        return $is_blocked;
     }
 
     /**
@@ -359,6 +376,7 @@ class EDHBB_Database {
         // phpcs:enable WordPress.DB.PreparedSQL.NotPrepared
 
         if ($result) {
+            delete_transient( 'edhbb_wl_' . md5( $ip_address ) );
             // Re-update .htaccess rules to ensure whitelisted IPs are not blocked by old rules, respecting the option.
             $this->update_htaccess_block_rules();
         }
@@ -380,6 +398,7 @@ class EDHBB_Database {
         );
 
         if ($result) {
+            delete_transient( 'edhbb_wl_' . md5( $ip_address ) );
             // Re-update .htaccess rules as a whitelisted IP might now be eligible for blocking if it was in blocked list, respecting the option.
             $this->update_htaccess_block_rules();
         }
@@ -408,6 +427,12 @@ class EDHBB_Database {
      * @return bool True if the IP is whitelisted, false otherwise.
      */
     public function is_ip_whitelisted( $ip_address ) {
+        $cache_key = 'edhbb_wl_' . md5( $ip_address );
+        $cached = get_transient( $cache_key );
+        if ( false !== $cached ) {
+            return ( '1' === $cached );
+        }
+
         // phpcs:disable WordPress.DB.PreparedSQL.NotPrepared -- %i placeholder is valid since WordPress 6.2
         $result = $this->wpdb->get_var(
             $this->wpdb->prepare(
@@ -418,7 +443,9 @@ class EDHBB_Database {
         );
         // phpcs:enable WordPress.DB.PreparedSQL.NotPrepared
 
-        return ( $result > 0 );
+        $is_whitelisted = ( $result > 0 );
+        set_transient( $cache_key, $is_whitelisted ? '1' : '0', HOUR_IN_SECONDS );
+        return $is_whitelisted;
     }
 
     /**
@@ -462,7 +489,7 @@ class EDHBB_Database {
         // phpcs:disable WordPress.DB.PreparedSQL.NotPrepared -- %i placeholder is valid since WordPress 6.2
         $results = $this->wpdb->get_results(
             $this->wpdb->prepare(
-                "SELECT ip_address FROM %i WHERE (hostname IS NULL OR hostname = '' OR hostname = '[No PTR Record]') AND expires_at > %s LIMIT %d",
+                "SELECT ip_address FROM %i WHERE (hostname IS NULL OR hostname = '') AND expires_at > %s LIMIT %d",
                 $this->blocked_bots_table_name,
                 current_time( 'mysql' ),
                 $limit
@@ -480,6 +507,11 @@ class EDHBB_Database {
      * And triggers an .htaccess update to remove expired blocks (if enabled).
      */
     public function clean_old_blocked_bots() {
+        if ( get_transient( 'edhbb_last_cleanup' ) ) {
+            return; // Already ran recently
+        }
+        set_transient( 'edhbb_last_cleanup', true, HOUR_IN_SECONDS );
+
         // phpcs:disable WordPress.DB.PreparedSQL.NotPrepared -- %i placeholder is valid since WordPress 6.2
         $result = $this->wpdb->query(
             $this->wpdb->prepare(
@@ -501,6 +533,8 @@ class EDHBB_Database {
      * or the .htaccess blocking option is toggled.
      */
     public function update_htaccess_block_rules() {
+        $this->init_filesystem();
+
         // Retrieve the current setting for .htaccess blocking. Defaults to 'no' if not set.
         $enable_htaccess_blocking = get_option( 'edhbb_enable_htaccess_blocking', 'no' ) === 'yes';
 
@@ -533,7 +567,11 @@ class EDHBB_Database {
         // Always remove any existing block first. This ensures we start clean before potentially adding new rules
         // or leaving the block empty if the option is disabled.
         if ( strpos( $htaccess_content, $start_marker ) !== false ) {
-            $htaccess_content = preg_replace( "/{$start_marker}.*?{$end_marker}\s*/s", '', $htaccess_content );
+            $htaccess_content = preg_replace(
+                '/' . preg_quote( $start_marker, '/' ) . '.*?' . preg_quote( $end_marker, '/' ) . '\s*/s',
+                '',
+                $htaccess_content
+            );
         }
 
         // Only generate and insert new rules if the 'enable_htaccess_blocking' option is active.
@@ -542,9 +580,11 @@ class EDHBB_Database {
             // Importantly, we filter out any IPs that are also in the whitelist,
             // as whitelisted IPs should never be blocked by .htaccess rules.
             $blocked_ips_raw = $this->get_blocked_bots();
+            $whitelisted_ips_data = $this->get_whitelisted_ips();
+            $whitelisted_ips = array_column( $whitelisted_ips_data, 'ip_address' );
             $blocked_ips_for_htaccess = [];
-            foreach ($blocked_ips_raw as $bot) {
-                if (!$this->is_ip_whitelisted($bot['ip_address'])) {
+            foreach ( $blocked_ips_raw as $bot ) {
+                if ( ! in_array( $bot['ip_address'], $whitelisted_ips, true ) ) {
                     $blocked_ips_for_htaccess[] = $bot['ip_address'];
                 }
             }
@@ -557,6 +597,8 @@ class EDHBB_Database {
                 $new_rules .= "Order Allow,Deny\n"; // Define the order of processing
                 $new_rules .= "Allow from All\n"; // Allow all by default...
                 foreach ( $blocked_ips_for_htaccess as $ip ) {
+                    // Note: 'Deny from' may not reliably block IPv6 on all Apache configs.
+                    // IPv6 bots are also blocked at PHP level via is_bot_blocked().
                     $new_rules .= "Deny from " . $ip . "\n"; // ...then deny specific IPs
                 }
                 $new_rules .= "</Limit>\n";
@@ -579,6 +621,8 @@ class EDHBB_Database {
      * Useful for plugin deactivation to ensure a clean uninstall.
      */
     private function remove_htaccess_block_rules( $force_remove = false ) {
+        $this->init_filesystem();
+
         // Get the current option status.
         $enable_htaccess_blocking = get_option( 'edhbb_enable_htaccess_blocking', 'no' ) === 'yes';
 
@@ -605,7 +649,11 @@ class EDHBB_Database {
 
         // Remove the entire block if it exists within the file.
         if ( strpos( $htaccess_content, $start_marker ) !== false ) {
-            $htaccess_content = preg_replace( "/{$start_marker}.*?{$end_marker}\s*/s", '', $htaccess_content );
+            $htaccess_content = preg_replace(
+                '/' . preg_quote( $start_marker, '/' ) . '.*?' . preg_quote( $end_marker, '/' ) . '\s*/s',
+                '',
+                $htaccess_content
+            );
             $this->wp_filesystem->put_contents( $this->htaccess_path, $htaccess_content, FS_CHMOD_FILE ); // Write back the cleaned content.
         }
     }

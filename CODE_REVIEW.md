@@ -149,6 +149,112 @@ Fix: Document this limitation in the plugin options, or use `Require not ip` syn
 
 ---
 
+---
+
+## Additional Findings
+
+### HIGH PRIORITY
+
+**11. IP Spoofing / Denial of Service Vulnerability (`class-edhbb-blocker.php:51–68`)**
+
+`get_client_ip()` trusts `HTTP_CLIENT_IP` and `HTTP_X_FORWARDED_FOR`, which can be trivially spoofed by malicious bots to impersonate whitelisted IPs (e.g. Googlebot, the site admin). This causes the wrong IPs to be blocked globally.
+
+Fix: Rewrite to use only `REMOTE_ADDR`.
+
+```php
+// Before:
+if ( isset( $_SERVER['HTTP_CLIENT_IP'] ) ... ) { ... }
+elseif ( isset( $_SERVER['HTTP_X_FORWARDED_FOR'] ) ... ) { ... }
+elseif ( isset( $_SERVER['REMOTE_ADDR'] ) ... ) { ... }
+
+// After:
+private function get_client_ip() {
+    $ip_address = isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : 'UNKNOWN';
+    if ( filter_var( $ip_address, FILTER_VALIDATE_IP ) ) {
+        return $ip_address;
+    }
+    return 'UNKNOWN';
+}
+```
+
+---
+
+**12. N+1 Database Queries During .htaccess Generation (`class-edhbb-database.php:544–550`)**
+
+Inside `update_htaccess_block_rules()`, the `foreach` over all blocked IPs calls `$this->is_ip_whitelisted()` on each iteration — one SQL query per bot. With 1,000 blocked IPs this executes 1,000 queries per .htaccess write.
+
+Fix: Fetch the full whitelist once before the loop using the existing `get_whitelisted_ips()` method, then use `in_array()`.
+
+```php
+// Before:
+$blocked_ips_raw = $this->get_blocked_bots();
+$blocked_ips_for_htaccess = [];
+foreach ($blocked_ips_raw as $bot) {
+    if (!$this->is_ip_whitelisted($bot['ip_address'])) {
+        $blocked_ips_for_htaccess[] = $bot['ip_address'];
+    }
+}
+
+// After:
+$blocked_ips_raw = $this->get_blocked_bots();
+$whitelisted_ips_data = $this->get_whitelisted_ips();
+$whitelisted_ips = array_column( $whitelisted_ips_data, 'ip_address' );
+$blocked_ips_for_htaccess = [];
+foreach ($blocked_ips_raw as $bot) {
+    if ( ! in_array( $bot['ip_address'], $whitelisted_ips, true ) ) {
+        $blocked_ips_for_htaccess[] = $bot['ip_address'];
+    }
+}
+```
+
+---
+
+**13. Admin Files Loaded on Every Frontend Request (`class-edhbb-database.php:31`)**
+
+`__construct()` calls `$this->init_filesystem()`, which `require_once`s `wp-admin/includes/file.php` if `WP_Filesystem` is not already loaded. Because `EDHBB_Database` is instantiated on every page load via `plugins_loaded`, this drags a heavy admin-only file into every frontend request.
+
+Fix: Remove `$this->init_filesystem()` from `__construct()` and call it at the top of `update_htaccess_block_rules()` and `remove_htaccess_block_rules()` only — the two places that actually need filesystem access.
+
+---
+
+### MEDIUM PRIORITY
+
+**14. Trap Logic False Positives via `strpos` (`class-edhbb-blocker.php:119`)**
+
+`detect_bot_trap_hit()` uses `strpos( $current_url, $expected_trap_path ) !== false`. This is too loose — a query string or URL parameter that happens to contain the trap hash (e.g. `/?q={hash}`) will trigger a block against a real user.
+
+Fix: Parse the URI and compare only the path component exactly.
+
+```php
+// Before:
+if ( strpos( $current_url, $expected_trap_path ) !== false ) {
+
+// After:
+$parsed_current_url = wp_parse_url( $current_url );
+$current_path = isset( $parsed_current_url['path'] ) ? $parsed_current_url['path'] : '';
+if ( trim( $current_path, '/' ) === trim( $expected_trap_path, '/' ) ) {
+```
+
+---
+
+### LOW PRIORITY
+
+**15. Screen Reader UX — Trap Link Readable by Assistive Technology (`edh-bad-bots.php:194`)**
+
+The hidden trap link has `tabindex="-1"` but no `aria-hidden="true"`. Screen readers will still announce "Sssshhh, secret bot trap!" to visually impaired users.
+
+Fix: Add `aria-hidden="true"` to the `<a>` tag.
+
+```php
+// Before:
+echo '<a href="' . esc_url( $trap_url ) . '" rel="nofollow" tabindex="-1">Sssshhh, secret bot trap!</a>';
+
+// After:
+echo '<a href="' . esc_url( $trap_url ) . '" rel="nofollow" tabindex="-1" aria-hidden="true">Sssshhh, secret bot trap!</a>';
+```
+
+---
+
 ## Summary of Files to Change
 
 | File | Change |
@@ -161,3 +267,8 @@ Fix: Document this limitation in the plugin options, or use `Require not ip` syn
 | `edh-bad-bots.php:119–121` | Replace Reflection with direct `EDHBB_DNSLookup::get_hostname_for_blocked_ip()` |
 | `includes/class-edhbb-blocker.php:133` | Block immediately, defer hostname lookup to cron |
 | `includes/class-edhbb-blocker.php:184` | Fix or remove broken `traditional_hostname_lookup()` |
+| `includes/class-edhbb-blocker.php:51–68` | Rewrite `get_client_ip()` to use only `REMOTE_ADDR` (Issue 11) |
+| `includes/class-edhbb-database.php:544–550` | Replace per-bot `is_ip_whitelisted()` calls with bulk `get_whitelisted_ips()` + `in_array()` (Issue 12) |
+| `includes/class-edhbb-database.php:31` | Remove `init_filesystem()` from constructor; move call into `update_htaccess_block_rules()` and `remove_htaccess_block_rules()` (Issue 13) |
+| `includes/class-edhbb-blocker.php:119` | Replace `strpos` trap check with `wp_parse_url` strict path comparison (Issue 14) |
+| `edh-bad-bots.php:194` | Add `aria-hidden="true"` to the trap `<a>` tag (Issue 15) |
