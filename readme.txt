@@ -3,7 +3,7 @@ Contributors: EncodeDotHost, nbwpuk
 Tags: Security, Bots, DNS, PTR, Hostname
 Requires at least: 6.2
 Tested up to: 6.8
-Stable tag: 1.4.3
+Stable tag: 1.5.0
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -198,6 +198,23 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 3. Activate the plugin and test your changes
 
 ## Changelog
+
+### Version 1.5.0
+- **Security**: Fixed IP spoofing vulnerability — `get_client_ip()` now uses only `REMOTE_ADDR`, ignoring spoofable `HTTP_CLIENT_IP` and `HTTP_X_FORWARDED_FOR` headers
+- **Security**: Fixed trap detection false positives — URL path is now compared strictly rather than using loose `strpos` matching, preventing query strings from triggering blocks
+- **Performance**: Eliminated N+1 database queries during `.htaccess` generation — whitelist is now fetched once and checked with `in_array()` instead of a query per blocked IP
+- **Performance**: `init_filesystem()` no longer runs on every frontend page load — filesystem is only initialised when `.htaccess` write operations are actually needed
+- **Performance**: `is_ip_whitelisted()` and `is_bot_blocked()` now cache results in transients, with targeted cache invalidation on add/remove
+- **Performance**: `column_exists()` result is now cached in a WordPress option, eliminating repeated `INFORMATION_SCHEMA` queries
+- **Performance**: `clean_old_blocked_bots()` is now gated by an hourly transient, preventing a DELETE query on every page request
+- **Performance**: Removed synchronous DNS lookup on trap hit — bot is blocked immediately and hostname is resolved by the background cron job
+- **Performance**: Force-refresh-all-hostnames capped at 50 IPs per run to prevent PHP timeout and memory limit issues on large datasets
+- **Fix**: Removed `[No PTR Record]` from the cron retry query — IPs with no PTR record are no longer retried on every hourly run
+- **Fix**: Removed broken `traditional_hostname_lookup()` fallback which passed a raw IP to a PTR lookup (always returned empty)
+- **Fix**: Replaced all `ReflectionClass` usage with direct `EDHBB_DNSLookup::get_hostname_for_blocked_ip()` calls
+- **Fix**: `.htaccess` marker patterns now wrapped in `preg_quote()` for correctness
+- **Fix**: Reduced verbose DNS debug logging — routine start/end messages removed; only error and fallback messages remain
+- **Accessibility**: Added `aria-hidden="true"` to the hidden trap link so screen readers ignore it
 
 ### Version 1.4.3
 - **New**: Advanced DNS lookup system with DNS over HTTPS (DoH) support
