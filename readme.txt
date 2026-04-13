@@ -3,7 +3,7 @@ Contributors: EncodeDotHost, nbwpuk
 Tags: Security, Bots, DNS, PTR, Hostname
 Requires at least: 6.2
 Tested up to: 6.9
-Stable tag: 1.7.1
+Stable tag: 1.7.2
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -198,6 +198,13 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 3. Activate the plugin and test your changes
 
 ## Changelog
+
+### Version 1.7.2
+- **Fix**: Replace `wp_redirect()` with `wp_safe_redirect()` across all admin form handlers
+- **Fix**: Replace `is_writable()` with `wp_is_writable()` for WP Filesystem API compliance
+- **Fix**: Escape block duration integer via `absint()` in help tab output to satisfy `OutputNotEscaped` sniff
+- **Fix**: Suppress `PrefixAllGlobals` sniff in admin view template (template-scoped variables, not true PHP globals)
+- **Update**: Tested up to WordPress 6.9
 
 ### Version 1.7.1
 - **Fix**: Removed `<Limit GET POST HEAD>` wrapper from `.htaccess` block rules — bots using other HTTP methods (DELETE, PUT, PATCH, etc.) are now blocked at the server level too
