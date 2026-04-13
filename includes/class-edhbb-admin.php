@@ -165,7 +165,7 @@ class EDHBB_Admin {
 
         // Redirect back to the admin page, maintaining the current tab.
         $redirect_url = admin_url( 'tools.php?page=' . $this->admin_page_slug . '&tab=whitelist' );
-        wp_redirect( esc_url_raw( $redirect_url ) );
+        wp_safe_redirect( esc_url_raw( $redirect_url ) );
         exit;
     }
 
@@ -220,7 +220,7 @@ class EDHBB_Admin {
 
         // Redirect back to the admin page, maintaining the current tab.
         $redirect_url = admin_url( 'tools.php?page=' . $this->admin_page_slug . '&tab=whitelist' );
-        wp_redirect( esc_url_raw( $redirect_url ) );
+        wp_safe_redirect( esc_url_raw( $redirect_url ) );
         exit;
     }
 
@@ -276,7 +276,7 @@ class EDHBB_Admin {
         // Redirect back to the admin page, preserving the current page number.
         $paged = isset( $_POST['paged'] ) ? absint( $_POST['paged'] ) : 1;
         $redirect_url = admin_url( 'tools.php?page=' . $this->admin_page_slug . '&tab=blocked&paged=' . $paged );
-        wp_redirect( esc_url_raw( $redirect_url ) );
+        wp_safe_redirect( esc_url_raw( $redirect_url ) );
         exit;
     }
 
@@ -322,7 +322,7 @@ class EDHBB_Admin {
 
         // Redirect back to the admin page, specifically the 'options' tab, after saving.
         $redirect_url = admin_url( 'tools.php?page=' . $this->admin_page_slug . '&tab=options' );
-        wp_redirect( esc_url_raw( $redirect_url ) );
+        wp_safe_redirect( esc_url_raw( $redirect_url ) );
         exit; // Important: Always exit after a redirect to prevent further script execution.
     }
 
@@ -367,7 +367,7 @@ class EDHBB_Admin {
 
         // Redirect back to the admin page, specifically the 'blocked' tab.
         $redirect_url = admin_url( 'tools.php?page=' . $this->admin_page_slug . '&tab=blocked' );
-        wp_redirect( esc_url_raw( $redirect_url ) );
+        wp_safe_redirect( esc_url_raw( $redirect_url ) );
         exit;
     }
 
@@ -475,7 +475,7 @@ class EDHBB_Admin {
 
         // Redirect back to the admin page
         $redirect_url = admin_url( 'tools.php?page=' . $this->admin_page_slug . '&tab=blocked' );
-        wp_redirect( esc_url_raw( $redirect_url ) );
+        wp_safe_redirect( esc_url_raw( $redirect_url ) );
         exit;
     }
 }

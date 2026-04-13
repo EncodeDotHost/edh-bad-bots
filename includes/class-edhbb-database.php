@@ -302,7 +302,7 @@ class EDHBB_Database {
             "id, ip_address, hostname, blocked_at, expires_at" : 
             "id, ip_address, '' as hostname, blocked_at, expires_at";
 
-        // phpcs:disable WordPress.DB.PreparedSQL.NotPrepared -- %i placeholder is valid since WordPress 6.2
+        // phpcs:disable WordPress.DB.PreparedSQL.NotPrepared,PluginCheck.Security.DirectDB.UnescapedDBParameter -- %i placeholder is valid since WP 6.2; $select_fields is hardcoded, not user input
         $sql = "SELECT {$select_fields} FROM %i WHERE expires_at > %s ORDER BY blocked_at DESC";
         $sql_params = array( $this->blocked_bots_table_name, current_time( 'mysql' ) );
 
@@ -319,7 +319,7 @@ class EDHBB_Database {
             $this->wpdb->prepare( $sql, ...$sql_params ),
             ARRAY_A
         );
-        // phpcs:enable WordPress.DB.PreparedSQL.NotPrepared
+        // phpcs:enable WordPress.DB.PreparedSQL.NotPrepared,PluginCheck.Security.DirectDB.UnescapedDBParameter
     }
 
     /**
@@ -555,7 +555,7 @@ class EDHBB_Database {
     public function update_htaccess_block_rules() {
         $enable_htaccess_blocking = get_option( 'edhbb_enable_htaccess_blocking', 'no' ) === 'yes';
 
-        if ( ! file_exists( $this->htaccess_path ) || ! is_writable( $this->htaccess_path ) ) {
+        if ( ! file_exists( $this->htaccess_path ) || ! wp_is_writable( $this->htaccess_path ) ) {
             if ( $enable_htaccess_blocking && defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG ) {
                 // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Only logs when WP_DEBUG_LOG is enabled
                 error_log( '[EDH Bad Bots] .htaccess file not found or not writable at: ' . $this->htaccess_path );
@@ -618,7 +618,7 @@ class EDHBB_Database {
             return; // Do nothing if option is off and not forced.
         }
 
-        if ( ! file_exists( $this->htaccess_path ) || ! is_writable( $this->htaccess_path ) ) {
+        if ( ! file_exists( $this->htaccess_path ) || ! wp_is_writable( $this->htaccess_path ) ) {
             return;
         }
 

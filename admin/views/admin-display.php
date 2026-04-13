@@ -7,6 +7,8 @@
  */
 declare(strict_types=1);
 
+// phpcs:disable WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound -- Variables in this included view file are local to the template scope, not true PHP globals.
+
 if ( ! defined( 'ABSPATH' ) ) exit; // Exit if accessed directly
 
 // Ensure $db is available from the calling context (EDHBB_Admin::render_admin_page()).
@@ -321,12 +323,12 @@ $block_duration_days = get_option( 'edhbb_block_duration_days', 30 );
                         <?php esc_html_e( 'Bad bots, which ignore `robots.txt`, will follow the hidden link on your homepage and hit the trap URL.', 'edh-bad-bots' ); ?>
                     </li>
                     <li>
-                        <?php 
+                        <?php
                         echo sprintf(
                             /* translators: %d: number of days bots are blocked */
                             esc_html__( 'When a bot hits the trap URL, its IP address is recorded and added to a blocklist for %d days (configurable in Options).', 'edh-bad-bots' ),
-                            $current_block_duration
-                        ); 
+                            absint( $current_block_duration )
+                        );
                         ?>
                     </li>
                     <li>
@@ -372,7 +374,7 @@ $block_duration_days = get_option( 'edhbb_block_duration_days', 30 );
                         echo sprintf(
                             /* translators: %d: number of days bots are blocked */
                             esc_html__( 'This tab shows all IP addresses currently on the blocklist with their resolved hostnames. IPs are automatically removed after %d days, but you can manually unblock them here at any time.', 'edh-bad-bots' ),
-                            $current_block_duration
+                            absint( $current_block_duration )
                         ); 
                         ?>
                     </li>
