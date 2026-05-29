@@ -107,6 +107,7 @@ class EDHBB_Blocker {
         $current_path = isset( $parsed_current_url['path'] ) ? $parsed_current_url['path'] : '';
 
         if ( trim( $current_path, '/' ) === trim( $expected_trap_path, '/' ) ) {
+            header( 'X-Robots-Tag: noindex, nofollow' );
             $client_ip = $this->get_client_ip();
 
             // If IP is UNKNOWN or invalid, do not proceed.

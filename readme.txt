@@ -199,6 +199,9 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## Changelog
 
+### Version 1.7.3
+- **Enhancement**: Trap URL now sends `X-Robots-Tag: noindex, nofollow` HTTP header on every response, ensuring search engines cannot index the honeypot URL even if they reach it
+
 ### Version 1.7.2
 - **Fix**: Replace `wp_redirect()` with `wp_safe_redirect()` across all admin form handlers
 - **Fix**: Replace `is_writable()` with `wp_is_writable()` for WP Filesystem API compliance
